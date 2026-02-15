@@ -2,20 +2,31 @@
     const GEN_STORAGE_KEY = "vrahuneGeneratorsV4";
     const FOLDER_STATE_KEY = "vrahuneFolderStateV1";
 
-    const toolsConfig = [
-      {
-        id: "textCleaner",
-        name: "Text Cleaner",
-        description: "Clean numbered / multi-column lists into one-entry-per-line."
-      },
-      {
-        id: "diceRoller",
-        name: "Dice Roller",
-        description: "Roll D&D-style dice (1d20, 4d6+2, etc.)."
-      }
-    ];
-    let activeToolId = null;
-    let toolSearchTerm = "";
+   // Dynamic tool registry – tools register themselves from separate files
+const toolsRegistry = [];
+let activeToolId = null;
+let toolSearchTerm = "";
+
+// Global registration function that tool files will call.
+window.registerTool = function (toolDef) {
+  if (!toolDef || !toolDef.id) return;
+
+  const existingIndex = toolsRegistry.findIndex(t => t.id === toolDef.id);
+  if (existingIndex !== -1) {
+    toolsRegistry[existingIndex] = toolDef;
+  } else {
+    toolsRegistry.push(toolDef);
+  }
+
+  // If UI is already initialized, refresh the Tools nav.
+  if (window.__toolboxInitialized) {
+    renderToolsNav();
+  }
+};
+
+function getToolsList() {
+  return toolsRegistry.slice(); // shallow copy
+}
 
     let activeGenerator = null;
     let editingGeneratorId = null;
