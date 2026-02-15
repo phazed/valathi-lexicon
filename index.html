@@ -467,7 +467,7 @@
                 <select id="genTypeInput">
                   <option value="list">Random list</option>
                   <option value="lexicon">Lexicon translator</option>
-                  <option value="advanced">Advanced (tokens)</option>
+                  <option value="advanced">Advanced</option>
                 </select>
               </div>
             </div>
@@ -1354,7 +1354,7 @@
         return;
       }
 
-      // ADVANCED (TEMPLATES WITH TOKENS)
+      // ADVANCED GENERATOR
       if (gen.type === "advanced") {
         const items = gen.items || { patterns: [], tokenMap: {} };
         const patterns = Array.isArray(items.patterns) ? items.patterns : [];
@@ -1362,38 +1362,16 @@
 
         const patternsText = patterns.join("\n");
         const allTokens = extractTokensFromPatterns(patterns);
-        const gensAll = loadGenerators();
-        const listGenerators = gensAll.filter(g => g.type === "list");
 
         panel.innerHTML = `
           <div class="generator-title-main">
             ${gen.name}
           </div>
           <div class="muted" style="margin-bottom:8px;">
-            Advanced generator using tokens and other generators. Folder: ${gen.folder || "General"}
+            Advanced generator that stitches together outputs from your other generators using simple patterns.
           </div>
 
-          <div class="row">
-            <div class="col">
-              <label for="advPatternsInput">Patterns (one per line, tokens in {braces})</label>
-              <textarea id="advPatternsInput" placeholder="{Name} is a {Race} from {Hometown}, known for {Trait}.">${patternsText}</textarea>
-            </div>
-          </div>
-
-          <div class="section-title" style="margin-top:4px;">
-            <span>Token mappings</span>
-            <span class="muted" style="font-size:0.75rem;">Tokens are auto-detected from patterns</span>
-          </div>
-
-          <div id="advTokensContainer"></div>
-
-          <div class="row" style="margin-top:8px;">
-            <button id="advSaveBtn" class="btn-primary btn-small">Save template</button>
-            <button id="advDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
-          </div>
-
-          <hr>
-
+          <!-- TOP: Generate controls + results -->
           <div class="row">
             <div class="col">
               <label for="advCountInput">Count</label>
@@ -1406,19 +1384,59 @@
           </div>
 
           <div id="advResults" class="generated-list"></div>
+
+          <hr>
+
+          <!-- BOTTOM: Template settings (collapsible) -->
+          <div class="section-title">
+            <span>Template settings</span>
+            <button id="advToggleConfigBtn" class="btn-secondary btn-small">Edit template</button>
+          </div>
+
+          <div id="advConfig" style="display:none;">
+            <div class="muted" style="font-size:0.8rem; line-height:1.4; margin-bottom:6px;">
+              Tips:
+              <ul style="margin:4px 0 0 18px; padding:0; list-style:disc;">
+                <li>Write patterns using placeholders in braces, e.g. <code>{Name}</code>, <code>{Race}</code>, <code>{Place}</code>.</li>
+                <li>Each placeholder (token) pulls from one of your existing <b>list</b> generators.</li>
+                <li>Example pattern: <code>{Name} is a {Race} from {Hometown}, known for {Trait}.</code></li>
+              </ul>
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <label for="advPatternsInput">Patterns (one per line)</label>
+                <textarea id="advPatternsInput" placeholder="{Name} is a {Race} from {Hometown}, known for {Trait}.">${patternsText}</textarea>
+              </div>
+            </div>
+
+            <div class="section-title" style="margin-top:4px;">
+              <span>Token mappings</span>
+              <span class="muted" style="font-size:0.75rem;">Tokens are auto-detected from the patterns above</span>
+            </div>
+
+            <div id="advTokensContainer"></div>
+
+            <div class="row" style="margin-top:8px;">
+              <button id="advSaveBtn" class="btn-primary btn-small">Save template</button>
+              <button id="advDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
+            </div>
+          </div>
         `;
 
+        const advCountInput = panel.querySelector("#advCountInput");
+        const advGenerateBtn = panel.querySelector("#advGenerateBtn");
+        const advResults = panel.querySelector("#advResults");
+        const advToggleConfigBtn = panel.querySelector("#advToggleConfigBtn");
+        const advConfig = panel.querySelector("#advConfig");
         const advPatternsInput = panel.querySelector("#advPatternsInput");
         const advTokensContainer = panel.querySelector("#advTokensContainer");
         const advSaveBtn = panel.querySelector("#advSaveBtn");
         const advDeleteBtn = panel.querySelector("#advDeleteBtn");
-        const advCountInput = panel.querySelector("#advCountInput");
-        const advGenerateBtn = panel.querySelector("#advGenerateBtn");
-        const advResults = panel.querySelector("#advResults");
 
         function renderTokenMappings(currentTokens, currentMap) {
           if (!currentTokens.length) {
-            advTokensContainer.innerHTML = `<div class="muted" style="margin-top:4px;">No tokens found in patterns yet. Add {...} tokens to patterns above.</div>`;
+            advTokensContainer.innerHTML = `<div class="muted" style="margin-top:4px;">No tokens found yet. Add <code>{Token}</code> placeholders to your patterns above.</div>`;
             return;
           }
           const gensAll = loadGenerators();
@@ -1457,7 +1475,6 @@
           advTokensContainer.innerHTML = "";
           advTokensContainer.appendChild(table);
 
-          // After attaching, set selected values
           const selects = advTokensContainer.querySelectorAll(".adv-token-select");
           selects.forEach(sel => {
             const tok = sel.dataset.token;
@@ -1468,9 +1485,17 @@
           });
         }
 
-        // initial token mapping UI
+        // initial token mapping UI (hidden but ready)
         renderTokenMappings(allTokens, tokenMap);
 
+        // toggle template config visibility
+        advToggleConfigBtn.addEventListener("click", () => {
+          const isHidden = advConfig.style.display === "none";
+          advConfig.style.display = isHidden ? "block" : "none";
+          advToggleConfigBtn.textContent = isHidden ? "Hide template" : "Edit template";
+        });
+
+        // save template
         advSaveBtn.addEventListener("click", () => {
           const rawPatterns = (advPatternsInput.value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
           const newTokens = extractTokensFromPatterns(rawPatterns);
@@ -1495,7 +1520,6 @@
           };
           saveGenerators(gensCurrent);
 
-          // re-render token mapping with cleaned tokens
           renderTokenMappings(newTokens, newTokenMap);
 
           const msg = document.getElementById("copyMessage");
@@ -1505,10 +1529,12 @@
           }, 2500);
         });
 
+        // delete advanced generator
         advDeleteBtn.addEventListener("click", () => {
+          const gensCurrent = loadGenerators();
           const ok = window.confirm(`Delete generator “${gen.name}” from folder “${gen.folder || "General"}”?`);
           if (!ok) return;
-          const newList = gens.filter(g => g.id !== gen.id);
+          const newList = gensCurrent.filter(g => g.id !== gen.id);
           saveGenerators(newList);
           if (activeGenerator && activeGenerator.id === gen.id) {
             activeGenerator = null;
@@ -1517,6 +1543,7 @@
           renderActiveGeneratorPanel();
         });
 
+        // generate from template
         advGenerateBtn.addEventListener("click", () => {
           const gensCurrent = loadGenerators();
           const g = gensCurrent.find(x => x.id === gen.id);
@@ -1527,7 +1554,7 @@
 
           advResults.innerHTML = "";
           if (!patterns.length) {
-            advResults.innerHTML = `<div class="muted">No patterns defined yet.</div>`;
+            advResults.innerHTML = `<div class="muted">No patterns defined yet. Open “Edit template” below and add lines using {Tokens}.</div>`;
             return;
           }
 
@@ -1547,11 +1574,10 @@
               const sourceId = tMap[tok];
               const sourceGen = genById[sourceId];
               if (!sourceGen || sourceGen.type !== "list" || !Array.isArray(sourceGen.items) || !sourceGen.items.length) {
-                // leave token as-is if no mapping
                 return;
               }
               const value = rand(sourceGen.items);
-              const re = new RegExp("\\{" + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "\\}", "g");
+              const re = new RegExp("\\{" + tok.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + "\\}", "g");
               result = result.replace(re, value);
             });
 
@@ -1602,7 +1628,6 @@
       newFolderInput.value = "";
       newFolderInput.style.display = "none";
 
-      // show items for list/lexicon; hide for advanced
       itemsRow.style.display = "block";
 
       box.style.display = "block";
@@ -1639,7 +1664,6 @@
         itemsInput.value = arr.join("\n");
         itemsRow.style.display = "block";
       } else {
-        // advanced: we don't use this box for items; just for name/folder
         itemsInput.value = "";
         itemsRow.style.display = "none";
       }
@@ -1714,7 +1738,6 @@
 
         const existingType = gens[idx].type || "list";
 
-        // name/folder update always allowed
         gens[idx].folder = folder;
         gens[idx].name   = name;
 
@@ -1743,10 +1766,9 @@
             parsed.duplicates > 0 ? parsed.duplicates + " duplicates removed." : "No duplicates detected."
           }`;
         } else {
-          // advanced: only name/folder changed here
           saveGenerators(gens);
           msg.classList.remove("danger");
-          msg.textContent = `Updated “${name}” (advanced template). Edit patterns & tokens in the main panel.`;
+          msg.textContent = `Updated “${name}” (advanced generator). Edit patterns & tokens in the main panel.`;
         }
 
         activeGenerator = { id: editingGeneratorId };
@@ -1764,7 +1786,7 @@
           });
           saveGenerators(gens);
           msg.classList.remove("danger");
-          msg.textContent = `Saved advanced generator “${name}” in folder “${folder}”. Configure patterns & tokens in the main panel.`;
+          msg.textContent = `Saved advanced generator “${name}” in folder “${folder}”. Configure patterns & token mappings in the main panel.`;
           activeGenerator = { id };
         } else {
           let parsed;
@@ -1854,7 +1876,6 @@
         });
         saveGenerators(gens);
 
-        // move state
         if (folderState[folder]) {
           folderState[trimmed] = folderState[folder];
           delete folderState[folder];
@@ -1899,7 +1920,6 @@
 
       const hasLocal = !!window.localStorage.getItem(GEN_STORAGE_KEY);
       if (!hasLocal) {
-        // seed with initial
         const seeded = seedInitialGenerators();
         saveGenerators(seeded);
       }
