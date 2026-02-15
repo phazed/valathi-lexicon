@@ -2,547 +2,758 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Vrahune Generator Hub</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vrahune Toolbox – Generators & Lexicons</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     :root {
-      --bg: #050505;
-      --bg-alt: #101010;
+      --bg-main: #050608;
+      --bg-panel: #0b0f14;
+      --bg-panel-alt: #090d11;
+      --bg-nav: #050608;
+      --border-subtle: #232a33;
       --accent: #c0c0c0;
-      --accent-soft: rgba(192,192,192,0.22);
-      --text: #f5f5f5;
-      --muted: #a0a0a0;
-      --border: #2a2a2a;
-      --danger: #ff8080;
-      --shadow-soft: 0 14px 40px rgba(0, 0, 0, 0.75);
-      --radius-lg: 16px;
+      --accent-soft: #808890;
+      --accent-strong: #f5f5f5;
+      --danger: #ff5c5c;
+      --text-main: #e6e6e6;
+      --text-muted: #9ba1aa;
+      --hover: #151a22;
+      --shadow-soft: 0 0 24px rgba(0, 0, 0, 0.7);
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 6px;
+      --transition-fast: 0.16s ease-out;
     }
 
     * {
       box-sizing: border-box;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     body {
       margin: 0;
-      padding: 0;
-      background: radial-gradient(circle at top, #222 0, #050505 55%, #000 100%);
-      color: var(--text);
-      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                   "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top left, #151921 0, #050608 40%, #000000 100%);
+      color: var(--text-main);
+      height: 100vh;
       display: flex;
-      align-items: stretch;
-      justify-content: center;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Scrollbars */
+    *::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    *::-webkit-scrollbar-track {
+      background: #050608;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: #2c323d;
+      border-radius: 4px;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: #3a414d;
     }
 
     .app-shell {
-      max-width: 1200px;
-      width: 100%;
-      padding: 24px;
-    }
-
-    .card {
-      background: linear-gradient(145deg, rgba(8, 8, 8, 0.97), rgba(4, 4, 4, 0.99));
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow-soft);
-      padding: 20px 20px 18px;
-      backdrop-filter: blur(10px);
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      font-size: 1.4rem;
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 10px 12px;
       gap: 8px;
     }
 
-    h1 span.logo {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      border: 1px solid rgba(192,192,192,0.55);
-      background: radial-gradient(circle at top, rgba(230,230,230,0.25), transparent 60%);
-      font-size: 0.9rem;
-      color: var(--text);
-    }
-
-    .subtitle {
-      font-size: 0.85rem;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    label {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    input[type="text"],
-    input[type="number"],
-    textarea,
-    select {
-      width: 100%;
-      padding: 8px 9px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: rgba(12, 12, 12, 0.95);
-      color: var(--text);
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-    }
-
-    input[type="text"]:focus,
-    input[type="number"]:focus,
-    textarea:focus,
-    select:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 1px var(--accent-soft);
-      background: rgba(18, 18, 18, 1);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 120px;
-    }
-
-    button {
-      border-radius: 999px;
-      border: 1px solid transparent;
-      padding: 7px 14px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #f5f5f5, #bfbfbf);
-      color: #111;
-      box-shadow: 0 8px 22px rgba(200, 200, 200, 0.4);
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 30px rgba(230, 230, 230, 0.6);
-    }
-
-    .btn-secondary {
-      background: transparent;
-      border-color: var(--border);
-      color: var(--muted);
-    }
-
-    .btn-secondary:hover {
-      border-color: var(--accent-soft);
-      background: rgba(18, 18, 18, 0.96);
-    }
-
-    .btn-small {
-      padding: 4px 10px;
-      font-size: 0.8rem;
-    }
-
-    .btn-icon {
-      width: 26px;
-      height: 26px;
-      border-radius: 8px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      font-size: 1rem;
-      border-color: var(--border);
-    }
-
-    .btn-icon:hover {
-      border-color: var(--accent);
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .row {
-      display: flex;
-      gap: 10px;
-      align-items: flex-end;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .col {
-      flex: 1;
-      min-width: 140px;
-    }
-
-    .section-title {
-      font-size: 0.95rem;
-      margin-bottom: 6px;
+    header.app-header {
+      background: linear-gradient(135deg, #0b0f14, #050608);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 10px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
     }
 
-    .section-title span {
-      display: inline-flex;
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .app-title {
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-strong);
+    }
+
+    .app-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .header-right {
+      display: flex;
       align-items: center;
-      gap: 6px;
-    }
-
-    .muted {
-      color: var(--muted);
+      gap: 8px;
       font-size: 0.8rem;
     }
 
-    hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 16px 0;
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: #05090f;
+      color: var(--accent-soft);
     }
 
-    .danger {
-      color: var(--danger);
+    .btn-primary,
+    .btn-secondary,
+    .btn-small {
+      font-family: inherit;
+      font-size: 0.8rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      cursor: pointer;
+      background: #181f2b;
+      color: var(--accent-strong);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background var(--transition-fast), border-color var(--transition-fast), transform 0.06s ease-out, box-shadow 0.06s ease-out;
     }
 
-    .hub-body {
-      display: flex;
-      gap: 16px;
-      margin-top: 8px;
+    .btn-primary {
+      border-color: #818894;
+      background: radial-gradient(circle at top, #2a303b, #141821);
     }
 
-    .nav-column {
-      width: 280px;
-      min-width: 240px;
-      max-width: 320px;
-      display: flex;
-      flex-direction: column;
+    .btn-primary:hover {
+      background: radial-gradient(circle at top, #343b46, #171a24);
+      box-shadow: 0 0 12px rgba(192, 192, 192, 0.25);
+      transform: translateY(-0.5px);
     }
 
-    .detail-column {
+    .btn-secondary {
+      border-color: #303641;
+      background: #080b11;
+      color: var(--text-muted);
+    }
+
+    .btn-secondary:hover {
+      border-color: #3a414d;
+      background: #10141d;
+      transform: translateY(-0.5px);
+    }
+
+    .btn-small {
+      font-size: 0.76rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .layout-main {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      gap: 10px;
+      min-height: 0;
       flex: 1;
-      min-width: 0;
+    }
+
+    aside.sidebar {
+      background: var(--bg-nav);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 10px 8px;
       display: flex;
       flex-direction: column;
+      gap: 8px;
+      min-height: 0;
     }
 
-    @media (max-width: 900px) {
-      .hub-body {
-        flex-direction: column;
-      }
-      .nav-column {
-        width: 100%;
-        max-width: 100%;
-      }
+    .sidebar-header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 0 4px;
     }
 
-    .nav-area {
-      border-radius: 12px;
-      border: 1px solid rgba(60,60,60,0.9);
-      background: linear-gradient(180deg, rgba(10,10,10,0.98), rgba(5,5,5,0.98));
-      padding: 6px 8px;
-      max-height: 360px;
+    .sidebar-header-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .sidebar-title {
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-soft);
+    }
+
+    .sidebar-subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      background: #05070c;
+      color: var(--text-main);
+      font-size: 0.78rem;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #9aa2af;
+      box-shadow: 0 0 0 1px rgba(192,192,192,0.4);
+    }
+
+    .nav-scroll {
+      flex: 1;
       overflow-y: auto;
-      margin-top: 8px;
-      margin-bottom: 8px;
+      margin-top: 4px;
+      padding: 0 2px;
     }
 
     .nav-folder-heading {
       font-size: 0.78rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.11em;
-      margin: 4px 2px 0;
-      padding: 2px 4px;
+      padding: 3px 6px;
+      margin-top: 4px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(90deg, #070b11, #050608);
+      border: 1px solid rgba(59, 69, 83, 0.9);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 4px;
+      cursor: pointer;
     }
 
     .folder-toggle {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      cursor: pointer;
-      flex: 1;
-      min-width: 0;
     }
 
     .folder-arrow {
-      font-size: 0.8rem;
-      opacity: 0.9;
+      color: var(--accent-soft);
+      font-size: 0.7rem;
     }
 
     .folder-label {
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      color: var(--accent-strong);
     }
 
     .folder-badge {
-      font-size: 0.72rem;
-      opacity: 0.85;
-      margin-left: 4px;
+      font-size: 0.7rem;
+      padding: 0 4px;
+      border-radius: 999px;
+      border: 1px solid #3b4656;
+      color: var(--text-muted);
     }
 
     .folder-rename-btn {
-      border-radius: 8px;
       padding: 2px 6px;
       font-size: 0.7rem;
-      border-color: var(--border);
-      background: transparent;
-      color: var(--muted);
-    }
-
-    .folder-rename-btn:hover {
-      border-color: var(--accent-soft);
-      background: rgba(255,255,255,0.03);
-      color: var(--text);
     }
 
     .nav-generator {
-      font-size: 0.86rem;
-      padding: 5px 8px;
-      border-radius: 8px;
+      font-size: 0.78rem;
+      padding: 3px 10px 3px 22px;
+      border-radius: var(--radius-md);
       cursor: pointer;
+      margin-top: 1px;
+      color: var(--text-muted);
       display: flex;
       align-items: center;
-      justify-content: flex-start;
-      gap: 6px;
-      margin: 2px 2px;
-      border: 1px solid transparent;
+      justify-content: space-between;
+      gap: 4px;
     }
 
-    .nav-generator span.name {
+    .nav-generator:hover {
+      background: #151a22;
+      color: var(--accent-strong);
+    }
+
+    .nav-generator.active {
+      background: linear-gradient(135deg, #1f2835, #101720);
+      color: var(--accent-strong);
+      border: 1px solid #6d7584;
+    }
+
+    .nav-generator .name {
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    section.main-panel {
+      background: var(--bg-panel);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    #copyMessage {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 2px 4px;
+      border-radius: 999px;
+      border: 1px solid #222832;
+      background: #05070c;
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .nav-generator:hover {
-      border-color: var(--border);
-      background: rgba(255,255,255,0.03);
+    .generator-panel-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 0;
     }
 
-    .nav-generator.active {
-      border-color: var(--accent);
-      background: rgba(255,255,255,0.06);
+    #activeGeneratorLabel {
+      font-size: 0.9rem;
+      color: var(--accent-strong);
     }
 
-    .create-box {
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px dashed rgba(120,120,120,0.7);
-      background: rgba(10,10,10,0.95);
-    }
-
-    .generator-panel {
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(70,70,70,0.9);
-      background: radial-gradient(circle at top left, rgba(255,255,255,0.05), rgba(8,8,8,0.96));
-      min-height: 80px;
-      margin-top: 8px;
+    #generatorPanel {
+      flex: 1;
+      min-height: 0;
+      border-radius: var(--radius-md);
+      border: 1px solid #222832;
+      background: radial-gradient(circle at top left, #10151f, #05070c 70%);
+      padding: 10px 10px;
+      font-size: 0.8rem;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
 
     .generator-title-main {
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
+      color: var(--accent-strong);
+    }
+
+    .row {
       display: flex;
-      align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
+      margin-bottom: 6px;
+      align-items: flex-start;
+    }
+
+    .col {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: #05070c;
+      color: var(--text-main);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #9aa2af;
+      box-shadow: 0 0 0 1px rgba(192,192,192,0.4);
     }
 
     .generated-list {
-      margin-top: 8px;
-      padding: 6px 8px;
-      border-radius: 10px;
-      border: 1px solid rgba(45,45,45,0.9);
-      background: rgba(8,8,8,0.98);
-      max-height: 220px;
+      border-radius: var(--radius-md);
+      border: 1px solid #222832;
+      background: #05070c;
+      padding: 6px 5px;
+      font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.78rem;
+      flex: 1;
       overflow-y: auto;
-      font-size: 0.88rem;
+      min-height: 60px;
+      max-height: 260px;
     }
 
     .generated-item {
-      padding: 3px 0;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .generated-item:hover {
-      text-decoration: underline;
+      background: #161b24;
     }
 
-    .copy-message {
-      margin-top: 6px;
-      font-size: 0.78rem;
-      color: var(--muted);
+    .muted {
+      color: var(--text-muted);
     }
 
-    .items-expanded {
-      min-height: 260px !important;
-      max-height: 70vh;
+    hr {
+      border: none;
+      border-top: 1px solid #1a2028;
+      margin: 6px 0;
     }
 
-    table.token-table {
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--accent-soft);
+      margin-bottom: 4px;
+      gap: 6px;
+    }
+
+    .section-title span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .token-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 4px;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
+      margin-top: 2px;
     }
 
-    table.token-table th,
-    table.token-table td {
-      border-bottom: 1px solid var(--border);
-      padding: 4px 4px;
+    .token-table th,
+    .token-table td {
+      border: 1px solid #232a33;
+      padding: 4px 6px;
+    }
+
+    .token-table th {
+      background: #0b1017;
+      color: var(--accent-soft);
+      font-weight: 500;
       text-align: left;
     }
 
-    table.token-table th {
-      font-weight: 500;
-      color: var(--muted);
+    .token-table td {
+      background: #05070c;
+    }
+
+    .token-table select {
+      width: 100%;
+      font-size: 0.78rem;
+      padding: 3px 6px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Toolbox (text cleaner) */
+    .toolbox {
+      border-radius: var(--radius-md);
+      border: 1px solid #232a33;
+      background: #05070c;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+      margin-top: 4px;
+    }
+
+    .toolbox-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      gap: 6px;
+    }
+
+    .toolbox-title {
+      font-size: 0.8rem;
+      color: var(--accent-soft);
+    }
+
+    .toolbox-body {
+      margin-top: 4px;
+    }
+
+    .toolbox-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .toolbox-col textarea {
+      min-height: 70px;
+      font-size: 0.78rem;
+    }
+
+    .danger {
+      color: var(--danger) !important;
+    }
+
+    /* Generator create/edit overlay */
+    .generator-create-box {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .generator-create-inner {
+      width: 520px;
+      max-width: 95vw;
+      background: #05070c;
+      border-radius: var(--radius-lg);
+      border: 1px solid #2b323e;
+      box-shadow: var(--shadow-soft);
+      padding: 10px 12px;
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .generator-create-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      gap: 6px;
+    }
+
+    .generator-create-title {
+      font-size: 0.9rem;
+      color: var(--accent-strong);
+    }
+
+    .generator-create-body {
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .items-expanded {
+      max-height: 260px;
+      min-height: 160px;
+    }
+
+    @media (max-width: 960px) {
+      .layout-main {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto;
+      }
+      aside.sidebar {
+        order: 1;
+      }
+      section.main-panel {
+        order: 2;
+      }
+    }
+
+    code {
+      font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+      background: rgba(255,255,255,0.02);
+      border-radius: 4px;
+      padding: 0 3px;
     }
   </style>
 </head>
 <body>
   <div class="app-shell">
-    <div class="card">
-      <h1>
-        <span class="logo">V</span>
-        Vrahune Generator Hub
-      </h1>
-      <div class="subtitle">
-        Left: folders & generators (collapsible, renameable). Right: generator controls & results.
+    <header class="app-header">
+      <div class="header-left">
+        <div class="app-title">Vrahune Toolbox</div>
+        <div class="app-subtitle">
+          Local-only generators, lexicons, and templates for your world –
+          everything lives in your browser until you export it.
+        </div>
       </div>
-
-      <div class="section-title" style="justify-content:flex-end; margin-bottom:4px;">
-        <span class="muted" style="font-size:0.78rem;">Database</span>
-        <button id="downloadDbBtn" class="btn-secondary btn-small">
-          Download database (JSON)
+      <div class="header-right">
+        <span class="badge">Offline · Local Storage</span>
+        <button id="downloadDbBtn" class="btn-secondary btn-small" type="button">
+          ⬇ Download current database
         </button>
       </div>
+    </header>
 
-      <div class="hub-body">
-        <!-- LEFT COLUMN -->
-        <div class="nav-column">
-          <div class="section-title">
-            <span>Generators</span>
-            <button id="addGeneratorBtn" class="btn-secondary btn-icon" title="Create new generator">
-              ＋
+    <div class="layout-main">
+      <!-- LEFT: Generators / Folders -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-header-row">
+            <div>
+              <div class="sidebar-title">Generators & Lexicons</div>
+              <div class="sidebar-subtitle">Click a generator to use it · folders for organization</div>
+            </div>
+            <button id="addGeneratorBtn" class="btn-primary btn-small" type="button">
+              ＋ New
             </button>
           </div>
+          <input
+            id="generatorSearchInput"
+            class="search-input"
+            type="text"
+            placeholder="Search generators..."
+          />
+        </div>
 
-          <!-- SEARCH BAR -->
-          <div class="row" style="margin-top:0; margin-bottom:6px;">
-            <div class="col">
-              <label for="generatorSearchInput">Search</label>
-              <input id="generatorSearchInput" type="text" placeholder="Search generators...">
-            </div>
-          </div>
+        <div id="generatorNav" class="nav-scroll"></div>
+      </aside>
 
-          <!-- CREATE / EDIT GENERATOR -->
-          <div id="generatorCreateBox" class="create-box" style="display:none;">
-            <div class="muted" style="margin-bottom:6px;">
-              Create or edit a generator. Items can be names, lexicon entries, book titles, etc.
-              One per line. Duplicates are removed automatically.
-            </div>
+      <!-- RIGHT: Active generator + tools -->
+      <section class="main-panel">
+        <div id="copyMessage">Click any generated item or lexicon entry to copy.</div>
 
-            <div class="row">
-              <div class="col">
-                <label for="genFolderSelect">Folder</label>
-                <select id="genFolderSelect"></select>
-                <input id="genFolderNewInput" type="text" placeholder="New folder name" style="display:none; margin-top:4px;">
-              </div>
-              <div class="col">
-                <label for="genNameInput">Generator name</label>
-                <input id="genNameInput" type="text" placeholder="e.g. Valathi Lexicon, Tavern Names">
-              </div>
-              <div class="col">
-                <label for="genTypeInput">Type</label>
-                <select id="genTypeInput">
-                  <option value="list">Random list</option>
-                  <option value="lexicon">Lexicon translator</option>
-                  <option value="advanced">Advanced</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="row" id="genItemsRow">
-              <div class="col">
-                <label for="genItemsInput">Items list</label>
-                <textarea id="genItemsInput" placeholder="For list: one item per line&#10;For lexicon: english = valathi"></textarea>
-                <button type="button" id="expandItemsBtn" class="btn-secondary btn-small" style="margin-top:4px;">
-                  Expand list editor
-                </button>
-              </div>
-            </div>
-
-            <div class="row">
-              <button id="saveGeneratorBtn" class="btn-primary">
-                Save generator
-              </button>
-              <button id="cancelGeneratorBtn" class="btn-secondary">
-                Cancel
-              </button>
-            </div>
-
-            <div id="generatorCreateMessage" class="muted"></div>
-          </div>
-
-          <!-- GENERATOR NAV -->
-          <div id="generatorNav" class="nav-area"></div>
-
-          <!-- TEXT CLEANER TOOL (MINIMIZED) -->
-          <div id="textCleanerBox" class="create-box">
-            <div class="section-title" style="margin-bottom:4px;">
-              <span>Text cleaner</span>
-              <button id="toggleTextCleanerBtn" class="btn-secondary btn-small">Show</button>
-            </div>
-            <div id="textCleanerBody" style="display:none;">
-              <div class="muted" style="margin-bottom:6px;">
-                Paste messy lists (1. text, 2) text, - bullets). Click Clean and paste the result into a generator.
-              </div>
-              <label for="cleanInput">Raw text</label>
-              <textarea id="cleanInput" placeholder="e.g. 1. Alya, 2. Voren, 3) Maelis"></textarea>
-              <label for="cleanOutput" style="margin-top:6px;">Cleaned text</label>
-              <textarea id="cleanOutput" readonly placeholder="Result will appear here..."></textarea>
-              <div class="row" style="margin-top:6px;">
-                <button id="cleanRunBtn" class="btn-secondary btn-small">Clean text</button>
-                <button id="cleanCopyBtn" class="btn-secondary btn-small">Copy cleaned</button>
-              </div>
-            </div>
+        <div class="generator-panel-wrapper">
+          <div id="activeGeneratorLabel">No generator selected</div>
+          <div id="generatorPanel">
+            <div class="muted">Choose a generator from the left, or click ＋ to create one.</div>
           </div>
         </div>
 
-        <!-- RIGHT COLUMN -->
-        <div class="detail-column">
-          <div class="section-title">
-            <span id="activeGeneratorLabel">No generator selected</span>
+        <!-- Toolbox area (bottom of main panel) -->
+        <div class="toolbox">
+          <div class="toolbox-header">
+            <div class="toolbox-title">
+              Text Cleaner • list formatting helper
+            </div>
+            <button id="toggleTextCleanerBtn" class="btn-secondary btn-small" type="button">
+              Hide
+            </button>
           </div>
-
-          <div id="generatorPanel" class="generator-panel">
+          <div id="textCleanerBody" class="toolbox-body">
             <div class="muted">
-              Choose a generator from the left, or click ＋ to create one.
+              Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) on the left,
+              click <b>Clean text</b>, then copy the cleaned list for your generators.
+              It removes numbering and extra spacing.
+            </div>
+            <div class="toolbox-row">
+              <div class="toolbox-col">
+                <label for="cleanInput">Raw text</label>
+                <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
+              </div>
+              <div class="toolbox-col">
+                <label for="cleanOutput">Cleaned · one item per line</label>
+                <textarea id="cleanOutput" readonly></textarea>
+              </div>
+            </div>
+            <div class="row" style="margin-top:4px;">
+              <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
+                Clean text
+              </button>
+              <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
+                Copy cleaned text
+              </button>
             </div>
           </div>
+        </div>
+      </section>
+    </div>
+  </div>
 
-          <div id="copyMessage" class="copy-message">
-            Click any generated item or lexicon entry to copy.
+  <!-- Generator create / edit modal -->
+  <div id="generatorCreateBox" class="generator-create-box">
+    <div class="generator-create-inner">
+      <div class="generator-create-header">
+        <div class="generator-create-title">Create / Edit Generator</div>
+        <button id="cancelGeneratorBtn" class="btn-secondary btn-small" type="button">
+          ✕ Close
+        </button>
+      </div>
+      <div id="generatorCreateMessage" class="muted"></div>
+      <div class="generator-create-body">
+        <div class="row">
+          <div class="col">
+            <label for="genNameInput">Generator name</label>
+            <input id="genNameInput" type="text" placeholder="Elf Names, NPC Traits, Valathi Lexicon..." />
           </div>
+          <div class="col">
+            <label for="genFolderSelect">Folder</label>
+            <select id="genFolderSelect"></select>
+            <input
+              id="genFolderNewInput"
+              type="text"
+              placeholder="New folder name"
+              style="margin-top:4px; display:none;"
+            />
+          </div>
+          <div class="col">
+            <label for="genTypeInput">Type</label>
+            <select id="genTypeInput">
+              <option value="list">List (simple pool of items)</option>
+              <option value="lexicon">Lexicon (english = valathi)</option>
+              <option value="advanced">Advanced (patterns & tokens)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="genItemsRow" class="row">
+          <div class="col">
+            <label for="genItemsInput">Items / entries</label>
+            <textarea
+              id="genItemsInput"
+              placeholder="For list: one item per line.&#10;For lexicon: english = valathi, one per line."
+            ></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:6px; justify-content:space-between;">
+        <div class="col">
+          <button id="expandItemsBtn" class="btn-secondary btn-small" type="button">
+            Expand list editor
+          </button>
+        </div>
+        <div class="col" style="text-align:right;">
+          <button id="saveGeneratorBtn" class="btn-primary btn-small" type="button">
+            Save generator
+          </button>
         </div>
       </div>
     </div>
@@ -771,7 +982,6 @@
     // GENERATOR STORAGE
     // --------------------------------
     function seedInitialGenerators() {
-      // fixed ids so templates can refer to these
       const elfStartId = "seed-elf-starts";
       const elfMiddleId = "seed-elf-middles";
       const elfEndSoftId = "seed-elf-ends-soft";
@@ -781,7 +991,6 @@
       const bookPlaceId = "seed-book-place";
 
       return [
-        // simple lists used by templates
         {
           id: elfStartId,
           folder: "Names",
@@ -849,7 +1058,6 @@
             "Verdant Veil","Onyx Empire","Raven Fields","New Hope Frontier"
           ]
         },
-        // advanced templates
         {
           id: "seed-elf-names-template",
           folder: "Names",
@@ -867,7 +1075,8 @@
               Middle: elfMiddleId,
               EndSoft: elfEndSoftId,
               EndSharp: elfEndSharpId
-            }
+            },
+            profiles: []
           }
         },
         {
@@ -886,10 +1095,10 @@
               Adj: bookAdjId,
               Noun: bookNounId,
               Place: bookPlaceId
-            }
+            },
+            profiles: []
           }
         },
-        // lexicon
         {
           id: "gen-lex-valathi",
           folder: "Lexicons",
@@ -915,11 +1124,11 @@
             items = Array.isArray(items) ? items : [];
           } else if (type === "advanced") {
             if (!items || typeof items !== "object") {
-              items = { patterns: [], tokenMap: {} };
-            } else {
-              items.patterns = Array.isArray(items.patterns) ? items.patterns : [];
-              items.tokenMap = items.tokenMap && typeof items.tokenMap === "object" ? items.tokenMap : {};
+              items = {};
             }
+            items.patterns = Array.isArray(items.patterns) ? items.patterns : [];
+            items.tokenMap = items.tokenMap && typeof items.tokenMap === "object" ? items.tokenMap : {};
+            items.profiles = Array.isArray(items.profiles) ? items.profiles : [];
           }
           return { ...g, type, items };
         });
@@ -1439,14 +1648,15 @@
         return;
       }
 
-      // ADVANCED GENERATOR
+      // ADVANCED GENERATOR (simple + optional profiles)
       if (gen.type === "advanced") {
-        const items = gen.items || { patterns: [], tokenMap: {} };
-        const patterns = Array.isArray(items.patterns) ? items.patterns : [];
+        const items = gen.items || { patterns: [], tokenMap: {}, profiles: [] };
+        const simplePatterns = Array.isArray(items.patterns) ? items.patterns : [];
         const tokenMap = items.tokenMap && typeof items.tokenMap === "object" ? items.tokenMap : {};
-
-        const patternsText = patterns.join("\n");
-        const allTokens = extractTokensFromPatterns(patterns);
+        const profiles = Array.isArray(items.profiles) ? items.profiles : [];
+        const patternsText = simplePatterns.join("\n");
+        const allTokens = extractTokensFromPatterns(simplePatterns);
+        const profilesText = profiles.length ? JSON.stringify(profiles, null, 2) : "";
 
         panel.innerHTML = `
           <div class="generator-title-main">
@@ -1472,52 +1682,113 @@
 
           <hr>
 
-          <!-- BOTTOM: Template settings (collapsible) -->
+          <!-- SIMPLE TEMPLATE SETTINGS -->
           <div class="section-title">
-            <span>Template settings</span>
-            <button id="advToggleConfigBtn" class="btn-secondary btn-small">Edit template</button>
+            <span>Simple template (fallback)</span>
+          </div>
+          <div class="muted" style="font-size:0.8rem; line-height:1.4; margin-bottom:6px;">
+            Tips:
+            <ul style="margin:4px 0 0 18px; padding:0; list-style:disc;">
+              <li>Write patterns using placeholders in braces, e.g. <code>{Name}</code>, <code>{Race}</code>, <code>{Place}</code>.</li>
+              <li>Each placeholder (token) pulls from one of your existing <b>list</b> generators.</li>
+              <li>If you do <b>not</b> use profiles, this simple template drives all results.</li>
+            </ul>
           </div>
 
-          <div id="advConfig" style="display:none;">
-            <div class="muted" style="font-size:0.8rem; line-height:1.4; margin-bottom:6px;">
-              Tips:
-              <ul style="margin:4px 0 0 18px; padding:0; list-style:disc;">
-                <li>Write patterns using placeholders in braces, e.g. <code>{Name}</code>, <code>{Race}</code>, <code>{Place}</code>.</li>
-                <li>Each placeholder (token) pulls from one of your existing <b>list</b> generators.</li>
-                <li>Example pattern: <code>{Name} is a {Race} from {Hometown}, known for {Trait}.</code></li>
-              </ul>
-            </div>
-
-            <div class="row">
-              <div class="col">
-                <label for="advPatternsInput">Patterns (one per line)</label>
-                <textarea id="advPatternsInput" placeholder="{Name} is a {Race} from {Hometown}, known for {Trait}.">${patternsText}</textarea>
-              </div>
-            </div>
-
-            <div class="section-title" style="margin-top:4px;">
-              <span>Token mappings</span>
-              <span class="muted" style="font-size:0.75rem;">Tokens are auto-detected from the patterns above</span>
-            </div>
-
-            <div id="advTokensContainer"></div>
-
-            <div class="row" style="margin-top:8px;">
-              <button id="advSaveBtn" class="btn-primary btn-small">Save template</button>
-              <button id="advDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
+          <div class="row">
+            <div class="col">
+              <label for="advPatternsInput">Patterns (one per line)</label>
+              <textarea id="advPatternsInput" placeholder="{Name} is a {Race} from {Hometown}, known for {Trait}.">${patternsText}</textarea>
             </div>
           </div>
+
+          <div class="section-title" style="margin-top:4px;">
+            <span>Token mappings</span>
+            <span class="muted" style="font-size:0.75rem;">Tokens are auto-detected from the patterns above</span>
+          </div>
+
+          <div id="advTokensContainer"></div>
+
+          <div class="row" style="margin-top:8px;">
+            <button id="advSaveBtn" class="btn-primary btn-small">Save simple template</button>
+            <button id="advDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
+          </div>
+
+          <hr>
+
+          <!-- PROFILES (OPTIONAL) -->
+          <div class="section-title">
+            <span>Profiles (optional)</span>
+          </div>
+          <div class="muted" style="font-size:0.8rem; line-height:1.4; margin-bottom:6px;">
+            Profiles let you mix multiple “cases” inside one generator — for example:
+            <ul style="margin:4px 0 0 18px; padding:0; list-style:disc;">
+              <li><b>Elf NPC</b> profile that uses Elf name + Elf hometown generators.</li>
+              <li><b>Human NPC</b> profile that uses Human name + Human hometown generators.</li>
+            </ul>
+            <b>How it works:</b> if one or more profiles are defined, each generated result will:
+            <ol style="margin:4px 0 0 18px; padding:0; list-style:decimal;">
+              <li>Pick a profile at random (using its <code>weight</code>).</li>
+              <li>Pick a pattern from that profile’s <code>patterns</code>.</li>
+              <li>Fill tokens using that profile’s <code>tokenMap</code>, falling back to the simple mapping above.</li>
+            </ol>
+            You define profiles below as JSON. This keeps the UI simple but powerful.
+          </div>
+
+          <label for="advProfilesInput">Profiles JSON</label>
+          <textarea id="advProfilesInput" style="min-height:160px;" placeholder="Leave empty to ignore profiles and just use the simple template.">${profilesText}</textarea>
+
+          <div class="muted" style="font-size:0.78rem; margin-top:4px;">
+            Tip: <b>tokenMap values are generator IDs</b> (e.g. "gen-elf-names"). If you want “fixed text” like <code>Elf</code>,
+            create a list generator with only that word and map the token to that generator.
+          </div>
+
+          <button id="advProfilesSaveBtn" class="btn-secondary btn-small" style="margin-top:6px;">
+            Save profiles
+          </button>
+
+          <details style="margin-top:8px;">
+            <summary class="muted" style="font-size:0.78rem; cursor:pointer;">See example profiles JSON</summary>
+            <pre style="background:#050505; border:1px solid #333; border-radius:8px; padding:8px; font-size:0.75rem; white-space:pre-wrap; margin-top:6px;">
+[
+  {
+    "name": "Elf NPC",
+    "weight": 2,
+    "patterns": [
+      "{Name} is an Elf from {Hometown}, known for {Trait}."
+    ],
+    "tokenMap": {
+      "Name": "gen-elf-names",
+      "Hometown": "gen-elf-towns",
+      "Trait": "gen-personality-traits"
+    }
+  },
+  {
+    "name": "Human NPC",
+    "weight": 3,
+    "patterns": [
+      "{Name} is a Human from {Hometown}, known for {Trait}."
+    ],
+    "tokenMap": {
+      "Name": "gen-human-names",
+      "Hometown": "gen-human-towns",
+      "Trait": "gen-personality-traits"
+    }
+  }
+]
+            </pre>
+          </details>
         `;
 
         const advCountInput = panel.querySelector("#advCountInput");
         const advGenerateBtn = panel.querySelector("#advGenerateBtn");
         const advResults = panel.querySelector("#advResults");
-        const advToggleConfigBtn = panel.querySelector("#advToggleConfigBtn");
-        const advConfig = panel.querySelector("#advConfig");
         const advPatternsInput = panel.querySelector("#advPatternsInput");
         const advTokensContainer = panel.querySelector("#advTokensContainer");
         const advSaveBtn = panel.querySelector("#advSaveBtn");
         const advDeleteBtn = panel.querySelector("#advDeleteBtn");
+        const advProfilesInput = panel.querySelector("#advProfilesInput");
+        const advProfilesSaveBtn = panel.querySelector("#advProfilesSaveBtn");
 
         function renderTokenMappings(currentTokens, currentMap) {
           if (!currentTokens.length) {
@@ -1541,7 +1812,6 @@
 
           currentTokens.forEach(token => {
             const tr = document.createElement("tr");
-            const mappedId = currentMap[token] || "";
             const selectHtmlOptions = [
               `<option value="">— none —</option>`,
               ...listGenerators.map(g => `<option value="${g.id}">${g.name}</option>`)
@@ -1570,23 +1840,20 @@
           });
         }
 
-        // initial token mapping UI (hidden but ready)
+        // initial token mapping UI
         renderTokenMappings(allTokens, tokenMap);
 
-        // toggle template config visibility
-        advToggleConfigBtn.addEventListener("click", () => {
-          const isHidden = advConfig.style.display === "none";
-          advConfig.style.display = isHidden ? "block" : "none";
-          advToggleConfigBtn.textContent = isHidden ? "Hide template" : "Edit template";
-        });
-
-        // save template
+        // save simple template
         advSaveBtn.addEventListener("click", () => {
           const rawPatterns = (advPatternsInput.value || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean);
           const newTokens = extractTokensFromPatterns(rawPatterns);
 
-          const newTokenMap = {};
+          const gensCurrent = loadGenerators();
+          const idx = gensCurrent.findIndex(x => x.id === gen.id);
+          if (idx === -1) return;
+
           const selects = advTokensContainer.querySelectorAll(".adv-token-select");
+          const newTokenMap = {};
           selects.forEach(sel => {
             const tok = sel.dataset.token;
             const val = sel.value || "";
@@ -1595,20 +1862,19 @@
             }
           });
 
-          const gensCurrent = loadGenerators();
-          const idx = gensCurrent.findIndex(x => x.id === gen.id);
-          if (idx === -1) return;
+          gensCurrent[idx].items = gensCurrent[idx].items || {};
+          gensCurrent[idx].items.patterns = rawPatterns;
+          gensCurrent[idx].items.tokenMap = newTokenMap;
+          if (!Array.isArray(gensCurrent[idx].items.profiles)) {
+            gensCurrent[idx].items.profiles = [];
+          }
 
-          gensCurrent[idx].items = {
-            patterns: rawPatterns,
-            tokenMap: newTokenMap
-          };
           saveGenerators(gensCurrent);
 
           renderTokenMappings(newTokens, newTokenMap);
 
           const msg = document.getElementById("copyMessage");
-          msg.textContent = `Template saved with ${rawPatterns.length} pattern(s) and ${Object.keys(newTokenMap).length} mapped token(s).`;
+          msg.textContent = `Simple template saved with ${rawPatterns.length} pattern(s) and ${Object.keys(newTokenMap).length} mapped token(s).`;
           setTimeout(() => {
             msg.textContent = "Click any generated item or lexicon entry to copy.";
           }, 2500);
@@ -1628,47 +1894,165 @@
           renderActiveGeneratorPanel();
         });
 
-        // generate from template
-        advGenerateBtn.addEventListener("click", () => {
-          const gensCurrent = loadGenerators();
-          const g = gensCurrent.find(x => x.id === gen.id);
-          if (!g || g.type !== "advanced") return;
-          const advItems = g.items || { patterns: [], tokenMap: {} };
-          const patterns = Array.isArray(advItems.patterns) ? advItems.patterns : [];
-          const tMap = advItems.tokenMap && typeof advItems.tokenMap === "object" ? advItems.tokenMap : {};
+        // save profiles JSON
+        advProfilesSaveBtn.addEventListener("click", () => {
+          const raw = advProfilesInput.value || "";
+          const msg = document.getElementById("copyMessage");
 
-          advResults.innerHTML = "";
-          if (!patterns.length) {
-            advResults.innerHTML = `<div class="muted">No patterns defined yet. Open “Edit template” below and add lines using {Tokens}.</div>`;
+          if (!raw.trim()) {
+            // Clear profiles
+            const gensCurrent = loadGenerators();
+            const idx = gensCurrent.findIndex(x => x.id === gen.id);
+            if (idx === -1) return;
+            gensCurrent[idx].items = gensCurrent[idx].items || {};
+            gensCurrent[idx].items.profiles = [];
+            saveGenerators(gensCurrent);
+            msg.textContent = "Profiles cleared. Advanced generator will use the simple template only.";
+            setTimeout(() => {
+              msg.textContent = "Click any generated item or lexicon entry to copy.";
+            }, 2500);
             return;
           }
 
-          const count = Math.max(1, Math.min(50, parseInt(advCountInput.value || "1", 10)));
+          try {
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) {
+              msg.textContent = "Profiles JSON must be an array (e.g. [ { ... }, { ... } ]).";
+              return;
+            }
+
+            // Light validation & normalization
+            const cleanedProfiles = parsed.map((p, idx) => {
+              const name = (p && p.name) ? String(p.name) : `Profile ${idx + 1}`;
+              const weight = Number.isFinite(p && p.weight) ? p.weight : parseInt(p && p.weight, 10) || 1;
+              const patterns = Array.isArray(p && p.patterns)
+                ? p.patterns.map(s => String(s).trim()).filter(Boolean)
+                : [];
+              const tokenMapObj = (p && typeof p.tokenMap === "object") ? p.tokenMap : {};
+              return { name, weight, patterns, tokenMap: tokenMapObj };
+            }).filter(p => p.patterns.length > 0);
+
+            const gensCurrent = loadGenerators();
+            const idx = gensCurrent.findIndex(x => x.id === gen.id);
+            if (idx === -1) return;
+
+            gensCurrent[idx].items = gensCurrent[idx].items || {};
+            gensCurrent[idx].items.profiles = cleanedProfiles;
+
+            saveGenerators(gensCurrent);
+
+            msg.textContent = `Saved ${cleanedProfiles.length} profile(s). When profiles exist, this generator will use them instead of the simple template.`;
+            setTimeout(() => {
+              msg.textContent = "Click any generated item or lexicon entry to copy.";
+            }, 3500);
+          } catch (e) {
+            msg.textContent = "Error parsing profiles JSON. Make sure it's valid JSON.";
+            setTimeout(() => {
+              msg.textContent = "Click any generated item or lexicon entry to copy.";
+            }, 3500);
+          }
+        });
+
+        // generate from simple or profiles
+        advGenerateBtn.addEventListener("click", () => {
           const gensLatest = loadGenerators();
+          const g = gensLatest.find(x => x.id === gen.id);
+          if (!g || g.type !== "advanced") return;
+          const advItems = g.items || { patterns: [], tokenMap: {}, profiles: [] };
+
+          const simplePatternsNow = Array.isArray(advItems.patterns) ? advItems.patterns : [];
+          const simpleTokenMapNow = advItems.tokenMap && typeof advItems.tokenMap === "object" ? advItems.tokenMap : {};
+          const profilesNow = Array.isArray(advItems.profiles) ? advItems.profiles : [];
+
+          const count = Math.max(1, Math.min(50, parseInt(advCountInput.value || "1", 10)));
           const genById = {};
           gensLatest.forEach(x => { genById[x.id] = x; });
 
+          advResults.innerHTML = "";
           const frag = document.createDocumentFragment();
 
+          function pickProfile(profilesArr) {
+            if (!profilesArr.length) return null;
+            let total = 0;
+            const weights = [];
+            for (const p of profilesArr) {
+              let w = parseInt(p.weight, 10);
+              if (!Number.isFinite(w) || w <= 0) w = 1;
+              weights.push(w);
+              total += w;
+            }
+            let roll = Math.random() * total;
+            for (let i = 0; i < profilesArr.length; i++) {
+              if (roll < weights[i]) return profilesArr[i];
+              roll -= weights[i];
+            }
+            return profilesArr[0];
+          }
+
           for (let i = 0; i < count; i++) {
-            let pattern = rand(patterns);
-            const tokens = extractTokensFromPatterns([pattern]);
-            let result = pattern;
+            let text = "";
 
-            tokens.forEach(tok => {
-              const sourceId = tMap[tok];
-              const sourceGen = genById[sourceId];
-              if (!sourceGen || sourceGen.type !== "list" || !Array.isArray(sourceGen.items) || !sourceGen.items.length) {
-                return;
+            if (profilesNow.length) {
+              const profile = pickProfile(profilesNow);
+              if (!profile) continue;
+
+              const pPatterns = Array.isArray(profile.patterns) && profile.patterns.length
+                ? profile.patterns
+                : simplePatternsNow;
+
+              if (!pPatterns || !pPatterns.length) {
+                continue;
               }
-              const value = rand(sourceGen.items);
-              const re = new RegExp("\\{" + tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "\\}", "g");
-              result = result.replace(re, value);
-            });
 
+              let pattern = rand(pPatterns);
+              const tokens = extractTokensFromPatterns([pattern]);
+              let result = pattern;
+
+              tokens.forEach(tok => {
+                let mappedId = null;
+                if (profile.tokenMap && profile.tokenMap[tok]) {
+                  mappedId = profile.tokenMap[tok];
+                } else if (simpleTokenMapNow[tok]) {
+                  mappedId = simpleTokenMapNow[tok];
+                }
+                if (!mappedId) return;
+                const sourceGen = genById[mappedId];
+                if (!sourceGen || sourceGen.type !== "list" || !Array.isArray(sourceGen.items) || !sourceGen.items.length) {
+                  return;
+                }
+                const value = rand(sourceGen.items);
+                const re = new RegExp("\\{" + tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\}", "g");
+                result = result.replace(re, value);
+              });
+
+              text = result;
+            } else {
+              if (!simplePatternsNow.length) {
+                continue;
+              }
+              let pattern = rand(simplePatternsNow);
+              const tokens = extractTokensFromPatterns([pattern]);
+              let result = pattern;
+
+              tokens.forEach(tok => {
+                const mappedId = simpleTokenMapNow[tok];
+                if (!mappedId) return;
+                const sourceGen = genById[mappedId];
+                if (!sourceGen || sourceGen.type !== "list" || !Array.isArray(sourceGen.items) || !sourceGen.items.length) {
+                  return;
+                }
+                const value = rand(sourceGen.items);
+                const re = new RegExp("\\{" + tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\}", "g");
+                result = result.replace(re, value);
+              });
+
+              text = result;
+            }
+
+            if (!text) continue;
             const div = document.createElement("div");
             div.className = "generated-item";
-            div.textContent = result;
+            div.textContent = text;
             frag.appendChild(div);
           }
 
@@ -1715,7 +2099,7 @@
 
       itemsRow.style.display = "block";
 
-      box.style.display = "block";
+      box.style.display = "flex";
     }
 
     function openEditGeneratorBox(genId) {
@@ -1764,7 +2148,7 @@
       newFolderInput.value = "";
       newFolderInput.style.display = "none";
 
-      box.style.display = "block";
+      box.style.display = "flex";
     }
 
     function hideGeneratorCreateBox() {
@@ -1851,9 +2235,10 @@
             parsed.duplicates > 0 ? parsed.duplicates + " duplicates removed." : "No duplicates detected."
           }`;
         } else {
+          // advanced: folder/name updated, template & profiles edited in main panel
           saveGenerators(gens);
           msg.classList.remove("danger");
-          msg.textContent = `Updated “${name}” (advanced generator). Edit patterns & tokens in the main panel.`;
+          msg.textContent = `Updated “${name}” (advanced generator). Edit patterns & profiles in the main panel.`;
         }
 
         activeGenerator = { id: editingGeneratorId };
@@ -1867,11 +2252,11 @@
             folder,
             name,
             type: "advanced",
-            items: { patterns: [], tokenMap: {} }
+            items: { patterns: [], tokenMap: {}, profiles: [] }
           });
           saveGenerators(gens);
           msg.classList.remove("danger");
-          msg.textContent = `Saved advanced generator “${name}” in folder “${folder}”. Configure patterns & token mappings in the main panel.`;
+          msg.textContent = `Saved advanced generator “${name}” in folder “${folder}”. Configure patterns & profiles in the main panel.`;
           activeGenerator = { id };
         } else {
           let parsed;
