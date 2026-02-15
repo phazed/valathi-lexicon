@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Valathi Lexicon – Vrahune</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #050610;
+      --bg-alt: #0b0f1c;
+      --accent: #7fd4ff;
+      --accent-soft: rgba(127, 212, 255, 0.15);
+      --text: #f3f7ff;
+      --muted: #9aa4c2;
+      --border: #1a2133;
+      --danger: #ff8181;
+      --shadow-soft: 0 14px 45px rgba(0, 0, 0, 0.55);
+      --radius-lg: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, #141b33 0, #050610 55%, #02030a 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+
+    .app-shell {
+      max-width: 1120px;
+      width: 100%;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: linear-gradient(145deg, rgba(8, 15, 36, 0.98), rgba(5, 7, 20, 0.99));
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-soft);
+      padding: 20px 20px 18px;
+      backdrop-filter: blur(10px);
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 8px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h1 span.logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid rgba(127, 212, 255, 0.45);
+      background: radial-gradient(circle at top, rgba(127, 212, 255, 0.25), transparent 60%);
+      font-size: 0.85rem;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], select, textarea {
+      width: 100%;
+      padding: 8px 9px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(6, 9, 26, 0.9);
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    input[type="text"]:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-soft);
+      background: rgba(9, 13, 34, 1);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    button {
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 7px 14px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #7fd4ff, #55a8ff);
+      color: #02101c;
+      box-shadow: 0 8px 22px rgba(85, 168, 255, 0.45);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 30px rgba(85, 168, 255, 0.6);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent-soft);
+      background: rgba(10, 16, 36, 0.9);
+    }
+
+    .btn-small {
+      padding: 4px 10px;
+      font-size: 0.8rem;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .col {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .result-box {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: radial-gradient(circle at top left, rgba(127, 212, 255, 0.08), rgba(8, 13, 30, 0.98));
+      border: 1px solid rgba(127, 212, 255, 0.18);
+    }
+
+    .result-word {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .result-meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .result-notes {
+      font-size: 0.9rem;
+      color: #d2ddff;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(127, 212, 255, 0.08);
+      border: 1px solid rgba(127, 212, 255, 0.24);
+      color: var(--accent);
+      margin-left: 6px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .lexicon-list {
+      margin-top: 10px;
+      max-height: 360px;
+      overflow-y: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(26, 33, 51, 0.9);
+      background: linear-gradient(180deg, rgba(5, 8, 22, 0.98), rgba(3, 5, 13, 0.98));
+    }
+
+    .lexicon-item {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(21, 27, 43, 0.88);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.85rem;
+    }
+
+    .lexicon-item:last-child {
+      border-bottom: none;
+    }
+
+    .lexicon-key {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+    }
+
+    .lexicon-val {
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .lexicon-notes {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .lexicon-type-pill {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(50, 60, 90, 0.9);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .tagline {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    .small-link {
+      font-size: 0.78rem;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- LEFT: Lookup & Add -->
+    <div class="card">
+      <h1>
+        <span class="logo">V</span>
+        Valathi Lexicon
+      </h1>
+      <div class="subtitle">Local wordbook for the Valathar tongue of Vrahune.</div>
+
+      <!-- Lookup -->
+      <div class="section-title">
+        <span>English → Valathi Lookup</span>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="searchInput">English word</label>
+          <input id="searchInput" type="text" placeholder="e.g. silver, castle, river" autocomplete="off">
+        </div>
+        <button id="searchBtn" class="btn-primary">
+          Translate
+        </button>
+      </div>
+
+      <div id="searchResult"></div>
+
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+
+      <!-- Add -->
+      <div class="section-title">
+        <span>Add / Edit Entry</span>
+        <span class="muted">Custom entries are saved in this browser only.</span>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="addEnglish">English</label>
+          <input id="addEnglish" type="text" placeholder="e.g. castle">
+        </div>
+        <div class="col">
+          <label for="addValathi">Valathi</label>
+          <input id="addValathi" type="text" placeholder="e.g. valdor">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <label for="addType">Type</label>
+          <select id="addType">
+            <option value="root">root</option>
+            <option value="noun" selected>noun</option>
+            <option value="place">place</option>
+            <option value="person-name">person-name</option>
+            <option value="title">title</option>
+            <option value="concept">concept</option>
+            <option value="other">other</option>
+          </select>
+        </div>
+        <div class="col">
+          <label for="addNotes">Notes (meaning, etymology)</label>
+          <input id="addNotes" type="text" placeholder="e.g. noble seat / fortress">
+        </div>
+        <button id="addBtn" class="btn-secondary">
+          Save word
+        </button>
+      </div>
+
+      <div id="addMessage" class="muted"></div>
+      <div class="tagline">
+        Tip: follow your Valathi rules (val, ’ath, anna, dor, vor, mir, len, vrae, sel, thal, nor, ves, etc.) when inventing new words.
+      </div>
+    </div>
+
+    <!-- RIGHT: Lexicon list -->
+    <div class="card">
+      <div class="section-title">
+        <span>Lexicon (Built-in + Custom)</span>
+        <button id="resetBtn" class="btn-secondary btn-small" title="Remove only your custom entries, not the built-in ones.">
+          Clear custom
+        </button>
+      </div>
+      <div class="lexicon-list" id="lexiconList"></div>
+      <div class="tagline">
+        Words in <span class="pill">root</span> form are your building blocks for names and compounds.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Base Valathi lexicon (roots + a few useful words) ---
+    // You can tweak this block manually if you want a "canon" set.
+    const baseLexicon = {
+      // Core nature & geography
+      "wind":      { valathi: "vrae",    type: "root",   notes: "wind, current of air" },
+      "world":     { valathi: "huneth",  type: "root",   notes: "wide expanse, world" },
+      "forest":    { valathi: "’ath",    type: "root",   notes: "living wood / forest" },
+      "land":      { valathi: "anna",    type: "root",   notes: "land, domain, region" },
+      "city":      { valathi: "dor",     type: "root",   notes: "seat, city, foundation" },
+      "mountain":  { valathi: "vor",     type: "root",   notes: "stone, mountain, cliff" },
+      "stone":     { valathi: "vor",     type: "root",   notes: "stone, mountain, cliff" },
+      "lake":      { valathi: "mir",     type: "root",   notes: "water, lake" },
+      "water":     { valathi: "mir",     type: "root",   notes: "water, lake" },
+      "river":     { valathi: "len",     type: "root",   notes: "river, flowing path" },
+      "sea":       { valathi: "thal",    type: "root",   notes: "sea, great water" },
+      "north":     { valathi: "nor",     type: "root",   notes: "north, cold lands" },
+      "field":     { valathi: "fal",     type: "root",   notes: "field, plain, open land" },
+      "island":    { valathi: "os",      type: "root",   notes: "island, isolated land" },
+      "depths":    { valathi: "drae",    type: "root",   notes: "deep chasm / sea-depths" },
+
+      // Sky, light, color
+      "star":      { valathi: "sel",     type: "root",   notes: "star, light in the dark" },
+      "sun":       { valathi: "rael",    type: "root",   notes: "sun, daylight warmth" },
+      "moon":      { valathi: "lun",     type: "root",   notes: "moon, lunar light" },
+      "shadow":    { valathi: "mor",     type: "root",   notes: "shadow, gloom" },
+      "rain":      { valathi: "hael",    type: "root",   notes: "rain, falling water" },
+      "green":     { valathi: "lir",     type: "root",   notes: "green, verdant, new growth" },
+
+      // Materials
+      "silver":    { valathi: "sael",    type: "root",   notes: "silver, pale radiant metal" },
+      "iron":      { valathi: "dras",    type: "root",   notes: "iron, hard metal" },
+      "crystal":   { valathi: "cyn",     type: "root",   notes: "crystal, gem, shining stone" },
+      "onyx":      { valathi: "vros",    type: "root",   notes: "black stone, onyx, obsidian" },
+
+      // Society & people
+      "noble":     { valathi: "val",     type: "root",   notes: "high, noble, elevated, bright" },
+      "guardian":  { valathi: "vel",     type: "root",   notes: "guardian, warden" },
+      "clan":      { valathi: "tar",     type: "root",   notes: "house, line, clan" },
+      "traveler":  { valathi: "rian",    type: "root",   notes: "wanderer, traveler" },
+      "court":     { valathi: "syl",     type: "root",   notes: "court, circle, noble company" },
+
+      // Abstract & magic
+      "peace":     { valathi: "ser",     type: "root",   notes: "peace, calm" },
+      "flame":     { valathi: "nar",     type: "root",   notes: "flame, passion" },
+      "song":      { valathi: "rin",     type: "root",   notes: "song, art, beautiful craft" },
+      "knowledge": { valathi: "ith",     type: "root",   notes: "lore, deep knowledge" },
+      "life":      { valathi: "lae",     type: "root",   notes: "life, breath, vitality" },
+      "hidden":    { valathi: "vyn",     type: "root",   notes: "hidden, veiled, secret" },
+      "fate":      { valathi: "feth",    type: "root",   notes: "fate, destined thread" },
+      "oath":      { valathi: "vos",     type: "root",   notes: "oath, vow, binding word" },
+      "dream":     { valathi: "sira",    type: "root",   notes: "dream, vision, trance" },
+      "ancient":   { valathi: "vaen",    type: "root",   notes: "old, ancient, elder days" },
+      "blessing":  { valathi: "raelis",  type: "root",   notes: "blessing, grace, favor" },
+      "blood":     { valathi: "saev",    type: "root",   notes: "blood, lifeblood, sacrifice" },
+      "wisdom":    { valathi: "maer",    type: "root",   notes: "wisdom, judgement, counsel" },
+
+      // A few “ready words” (not just roots)
+      "castle":    { valathi: "valdor",  type: "place",  notes: "noble seat / fortress (val + dor)" },
+      "realm":     { valathi: "valanna", type: "place",  notes: "noble land / high realm (val + anna)" },
+      "fortress":  { valathi: "vordor",  type: "place",  notes: "stone seat / mountain-fort (vor + dor)" },
+      "isle":      { valathi: "os",      type: "root",   notes: "island, isolated land" },
+      "continent": { valathi: "Vrahune", type: "place",  notes: "Wind-wreathed expanse (vrae + huneth)" }
+    };
+
+    // --- LocalStorage helpers ---
+    const STORAGE_KEY = "valathiLexiconCustom";
+
+    function loadCustomLexicon() {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === "object") ? parsed : {};
+      } catch (e) {
+        console.warn("Failed to load custom lexicon:", e);
+        return {};
+      }
+    }
+
+    function saveCustomLexicon(custom) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
+      } catch (e) {
+        console.warn("Failed to save custom lexicon:", e);
+      }
+    }
+
+    function mergeLexicons() {
+      const custom = loadCustomLexicon();
+      // base first, custom overrides
+      return { ...baseLexicon, ...custom };
+    }
+
+    // --- Render functions ---
+    function renderSearchResult(entryKey, entryData) {
+      const container = document.getElementById("searchResult");
+      container.innerHTML = "";
+
+      if (!entryData) {
+        container.innerHTML = `
+          <div class="result-box">
+            <div class="result-word danger">No entry yet for “${entryKey}”.</div>
+            <div class="result-notes">
+              You can add it below with your own Valathi word and meaning.
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const fromBase = !!baseLexicon[entryKey];
+      const sourceLabel = fromBase ? "built-in" : "custom";
+
+      container.innerHTML = `
+        <div class="result-box">
+          <div class="result-word">
+            ${entryData.valathi}
+            <span class="pill">${entryData.type || "word"}</span>
+          </div>
+          <div class="result-meta">
+            English: <strong>${entryKey}</strong> · Source: ${sourceLabel}
+          </div>
+          <div class="result-notes">
+            ${entryData.notes || "<span class='muted'>No notes yet.</span>"}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLexiconList() {
+      const listElement = document.getElementById("lexiconList");
+      const merged = mergeLexicons();
+      const keys = Object.keys(merged).sort((a, b) => a.localeCompare(b));
+      listElement.innerHTML = "";
+
+      keys.forEach(key => {
+        const entry = merged[key];
+        const div = document.createElement("div");
+        div.className = "lexicon-item";
+        div.innerHTML = `
+          <div>
+            <div class="lexicon-key">${key}</div>
+            <div class="lexicon-val">${entry.valathi}</div>
+            ${entry.notes ? `<div class="lexicon-notes">${entry.notes}</div>` : ""}
+          </div>
+          <div class="lexicon-type-pill">${entry.type || "word"}</div>
+        `;
+        listElement.appendChild(div);
+      });
+
+      if (!keys.length) {
+        listElement.innerHTML = `
+          <div class="lexicon-item">
+            <span class="muted">No entries yet. Add some words on the left.</span>
+          </div>
+        `;
+      }
+    }
+
+    // --- Event handlers ---
+    function handleSearch() {
+      const input = document.getElementById("searchInput");
+      const term = (input.value || "").trim().toLowerCase();
+      if (!term) {
+        document.getElementById("searchResult").innerHTML = "";
+        return;
+      }
+      const lexicon = mergeLexicons();
+      const entry = lexicon[term];
+      renderSearchResult(term, entry);
+    }
+
+    function handleAdd() {
+      const enInput = document.getElementById("addEnglish");
+      const vaInput = document.getElementById("addValathi");
+      const typeSelect = document.getElementById("addType");
+      const notesInput = document.getElementById("addNotes");
+      const msg = document.getElementById("addMessage");
+
+      const english = (enInput.value || "").trim().toLowerCase();
+      const valathi = (vaInput.value || "").trim();
+      const type = typeSelect.value;
+      const notes = notesInput.value.trim();
+
+      if (!english || !valathi) {
+        msg.textContent = "Please provide both an English word and a Valathi form.";
+        msg.classList.remove("danger");
+        msg.classList.add("muted");
+        return;
+      }
+
+      const custom = loadCustomLexicon();
+      custom[english] = { valathi, type, notes };
+      saveCustomLexicon(custom);
+
+      msg.textContent = `Saved entry for “${english}” → ${valathi}.`;
+      msg.classList.remove("danger");
+      msg.classList.add("muted");
+
+      // Refresh views
+      renderLexiconList();
+      const currentSearch = (document.getElementById("searchInput").value || "").trim().toLowerCase();
+      if (currentSearch === english) {
+        renderSearchResult(english, custom[english]);
+      }
+    }
+
+    function handleResetCustom() {
+      const ok = window.confirm("Clear ALL custom Valathi entries? Built-in words will remain.");
+      if (!ok) return;
+      saveCustomLexicon({});
+      renderLexiconList();
+      document.getElementById("addMessage").textContent = "Custom entries cleared.";
+      document.getElementById("searchResult").innerHTML = "";
+    }
+
+    // --- Init ---
+    document.addEventListener("DOMContentLoaded", () => {
+      renderLexiconList();
+
+      document.getElementById("searchBtn").addEventListener("click", handleSearch);
+      document.getElementById("searchInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleSearch();
+      });
+
+      document.getElementById("addBtn").addEventListener("click", handleAdd);
+      document.getElementById("resetBtn").addEventListener("click", handleResetCustom);
+    });
+  </script>
+</body>
+</html>
