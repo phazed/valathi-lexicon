@@ -41,7 +41,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Scrollbars */
     *::-webkit-scrollbar {
       width: 8px;
       height: 8px;
@@ -227,6 +226,10 @@
       padding: 0 2px;
     }
 
+    .sidebar-bottom-tools {
+      margin-top: 6px;
+    }
+
     .nav-folder-heading {
       font-size: 0.78rem;
       padding: 3px 6px;
@@ -307,7 +310,7 @@
       box-shadow: var(--shadow-soft);
       padding: 10px 12px;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-rows: auto minmax(0, 1fr);
       gap: 8px;
       min-height: 0;
     }
@@ -471,6 +474,7 @@
     .token-table td {
       border: 1px solid #232a33;
       padding: 4px 6px;
+      vertical-align: top;
     }
 
     .token-table th {
@@ -500,7 +504,7 @@
       border-radius: 999px;
       border: 1px solid #2d3440;
       overflow: hidden;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       background: #05070c;
     }
 
@@ -525,14 +529,92 @@
       background: #10141d;
     }
 
-    /* Toolbox (text cleaner) */
+    #advEditSection {
+      border-radius: var(--radius-md);
+      border: 1px solid #232a33;
+      background: #05070c;
+      padding: 6px;
+      margin-top: 4px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    #advEditSection .row {
+      margin-bottom: 4px;
+    }
+
+    #advEditSection textarea {
+      min-height: 60px;
+    }
+
+    /* Advanced token search + chips */
+    .adv-token-advanced {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .adv-selected-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-height: 22px;
+    }
+
+    .adv-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid #3a414d;
+      background: #10151f;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    .adv-chip-remove {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 0 2px;
+    }
+
+    .adv-chip-remove:hover {
+      color: var(--danger);
+    }
+
+    .adv-search-input {
+      font-size: 0.75rem;
+      padding: 3px 6px;
+    }
+
+    .adv-search-results {
+      font-size: 0.75rem;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+
+    .adv-search-item {
+      padding: 2px 4px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .adv-search-item:hover {
+      background: #161b24;
+      color: var(--accent-strong);
+    }
+
+    /* Toolbox (text cleaner) in sidebar */
     .toolbox {
       border-radius: var(--radius-md);
       border: 1px solid #232a33;
       background: #05070c;
       padding: 6px 8px;
       font-size: 0.78rem;
-      margin-top: 4px;
     }
 
     .toolbox-header {
@@ -554,13 +636,13 @@
 
     .toolbox-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
+      grid-template-columns: 1fr;
+      gap: 4px;
       margin-top: 4px;
     }
 
     .toolbox-col textarea {
-      min-height: 70px;
+      min-height: 60px;
       font-size: 0.78rem;
     }
 
@@ -568,7 +650,6 @@
       color: var(--danger) !important;
     }
 
-    /* Generator create/edit overlay */
     .generator-create-box {
       position: fixed;
       inset: 0;
@@ -628,6 +709,9 @@
       section.main-panel {
         order: 2;
       }
+      .toolbox-row {
+        grid-template-columns: 1fr;
+      }
     }
 
     code {
@@ -658,7 +742,7 @@
     </header>
 
     <div class="layout-main">
-      <!-- LEFT: Generators / Folders -->
+      <!-- LEFT: Generators / Folders + Text Cleaner -->
       <aside class="sidebar">
         <div class="sidebar-header">
           <div class="sidebar-header-row">
@@ -679,9 +763,47 @@
         </div>
 
         <div id="generatorNav" class="nav-scroll"></div>
+
+        <!-- Text Cleaner toolbox now in sidebar bottom -->
+        <div class="sidebar-bottom-tools">
+          <div class="toolbox">
+            <div class="toolbox-header">
+              <div class="toolbox-title">
+                Text Cleaner • list formatting helper
+              </div>
+              <button id="toggleTextCleanerBtn" class="btn-secondary btn-small" type="button">
+                Hide
+              </button>
+            </div>
+            <div id="textCleanerBody" class="toolbox-body">
+              <div class="muted">
+                Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) below,
+                click <b>Clean text</b>, then copy the cleaned list for your generators.
+              </div>
+              <div class="toolbox-row">
+                <div class="toolbox-col">
+                  <label for="cleanInput">Raw text</label>
+                  <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
+                </div>
+                <div class="toolbox-col">
+                  <label for="cleanOutput">Cleaned · one item per line</label>
+                  <textarea id="cleanOutput" readonly></textarea>
+                </div>
+              </div>
+              <div class="row" style="margin-top:4px;">
+                <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
+                  Clean text
+                </button>
+                <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
+                  Copy cleaned text
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </aside>
 
-      <!-- RIGHT: Active generator + tools -->
+      <!-- RIGHT: Active generator -->
       <section class="main-panel">
         <div id="copyMessage">Click any generated item or lexicon entry to copy.</div>
 
@@ -689,43 +811,6 @@
           <div id="activeGeneratorLabel">No generator selected</div>
           <div id="generatorPanel">
             <div class="muted">Choose a generator from the left, or click ＋ to create one.</div>
-          </div>
-        </div>
-
-        <!-- Toolbox area (bottom of main panel) -->
-        <div class="toolbox">
-          <div class="toolbox-header">
-            <div class="toolbox-title">
-              Text Cleaner • list formatting helper
-            </div>
-            <button id="toggleTextCleanerBtn" class="btn-secondary btn-small" type="button">
-              Hide
-            </button>
-          </div>
-          <div id="textCleanerBody" class="toolbox-body">
-            <div class="muted">
-              Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) on the left,
-              click <b>Clean text</b>, then copy the cleaned list for your generators.
-              It removes numbering and extra spacing.
-            </div>
-            <div class="toolbox-row">
-              <div class="toolbox-col">
-                <label for="cleanInput">Raw text</label>
-                <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
-              </div>
-              <div class="toolbox-col">
-                <label for="cleanOutput">Cleaned · one item per line</label>
-                <textarea id="cleanOutput" readonly></textarea>
-              </div>
-            </div>
-            <div class="row" style="margin-top:4px;">
-              <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
-                Clean text
-              </button>
-              <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
-                Copy cleaned text
-              </button>
-            </div>
           </div>
         </div>
       </section>
@@ -794,21 +879,15 @@
   </div>
 
   <script>
-    // --------------------------------
-    // KEYS & STATE
-    // --------------------------------
     const GEN_STORAGE_KEY = "vrahuneGeneratorsV4";
     const FOLDER_STATE_KEY = "vrahuneFolderStateV1";
 
     let activeGenerator = null;
     let editingGeneratorId = null;
     let itemsExpanded = false;
-    let folderState = {}; // { folderName: { collapsed: bool } }
+    let folderState = {};
     let generatorSearchTerm = "";
 
-    // --------------------------------
-    // INITIAL LEXICON SEED
-    // --------------------------------
     const valathiLexiconSeed = [
       { english: "high, noble, elevated, bright", valathi: "val" },
       { english: "forest, wooded land", valathi: "’ath" },
@@ -834,9 +913,6 @@
       { english: "high seat, noble city", valathi: "Valdora" }
     ];
 
-    // --------------------------------
-    // HELPERS
-    // --------------------------------
     function rand(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
     }
@@ -955,7 +1031,6 @@
       return Array.from(tokenSet);
     }
 
-    // Improved text cleaner.
     function cleanTextForGenerator(raw) {
       if (!raw) return "";
 
@@ -981,9 +1056,6 @@
       return cleaned.join("\n");
     }
 
-    // --------------------------------
-    // FOLDER STATE
-    // --------------------------------
     function loadFolderState() {
       try {
         const raw = window.localStorage.getItem(FOLDER_STATE_KEY);
@@ -1001,9 +1073,6 @@
       } catch {}
     }
 
-    // --------------------------------
-    // GENERATOR STORAGE
-    // --------------------------------
     function seedInitialGenerators() {
       const elfStartId = "seed-elf-starts";
       const elfMiddleId = "seed-elf-middles";
@@ -1166,9 +1235,6 @@
       } catch {}
     }
 
-    // --------------------------------
-    // FOLDER SELECT (create/edit)
-    // --------------------------------
     function populateFolderSelect(selectedFolder) {
       const select = document.getElementById("genFolderSelect");
       if (!select) return;
@@ -1225,9 +1291,6 @@
       }
     }
 
-    // --------------------------------
-    // NAV RENDERING (with collapse & rename & search)
-    // --------------------------------
     function renderGeneratorNav() {
       const nav = document.getElementById("generatorNav");
       nav.innerHTML = "";
@@ -1299,9 +1362,6 @@
       }
     }
 
-    // --------------------------------
-    // ACTIVE GENERATOR PANEL
-    // --------------------------------
     function renderActiveGeneratorPanel() {
       const label = document.getElementById("activeGeneratorLabel");
       const panel = document.getElementById("generatorPanel");
@@ -1324,7 +1384,6 @@
 
       label.textContent = `${gen.name} (${gen.folder || "General"})`;
 
-      // LIST GENERATOR
       if (gen.type === "list") {
         panel.innerHTML = `
           <div class="generator-title-main">
@@ -1395,7 +1454,6 @@
         return;
       }
 
-      // LEXICON GENERATOR
       if (gen.type === "lexicon") {
         panel.innerHTML = `
           <div class="generator-title-main">
@@ -1666,7 +1724,6 @@
         return;
       }
 
-      // ADVANCED GENERATOR
       if (gen.type === "advanced") {
         const items = gen.items || {};
         const patterns = Array.isArray(items.patterns) ? items.patterns : [];
@@ -1681,10 +1738,9 @@
           </div>
           <div class="muted" style="margin-bottom:8px;">
             Advanced generator that stitches together outputs from your other generators using <code>{Tokens}</code>.
-            Use <b>Simple</b> for one generator per token, or <b>Advanced</b> to let a token pull from multiple generators.
+            Use <b>Simple</b> for one generator per token, or <b>Advanced</b> to let a token pull from multiple generators with search & click.
           </div>
 
-          <!-- Generate controls + results -->
           <div class="row">
             <div class="col">
               <label for="advCountInput">Count</label>
@@ -1700,7 +1756,6 @@
 
           <hr>
 
-          <!-- Hidden edit section (toggle) -->
           <div class="section-title">
             <span>Template & mappings</span>
             <button id="advEditToggleBtn" class="btn-secondary btn-small adv-edit-toggle" type="button">
@@ -1708,10 +1763,10 @@
             </button>
           </div>
           <div class="muted" style="font-size:0.78rem; margin-bottom:4px;">
-            Keep this closed if you just want to generate with the existing setup. Open it when you want to tweak patterns or which generators each <code>{Token}</code> pulls from.
+            Keep this closed if you just want to generate with the existing setup. Open it to tweak patterns or which generators each <code>{Token}</code> pulls from.
           </div>
 
-          <div id="advEditSection" style="display:none; margin-top:6px;">
+          <div id="advEditSection" style="display:none;">
             <div class="row">
               <div class="col">
                 <label for="advPatternsInput">Patterns (one per line)</label>
@@ -1719,11 +1774,12 @@
               </div>
             </div>
 
-            <div class="section-title" style="margin-top:6px;">
+            <div class="section-title" style="margin-top:4px;">
               <span>Token mappings</span>
             </div>
             <div class="muted" style="font-size:0.78rem; margin-bottom:4px;">
-              Choose how each <code>{Token}</code> pulls from your list generators.
+              <b>Simple tab:</b> one generator per token. <b>Advanced tab:</b> for each token, search and click to add multiple generators.  
+              On use, one of those generators is chosen at random.
             </div>
 
             <div class="adv-tab-bar">
@@ -1732,14 +1788,16 @@
             </div>
 
             <div id="advTokensSimpleContainer"></div>
-            <div id="advTokensAdvancedContainer" style="display:none; margin-top:6px;"></div>
+            <div id="advTokensAdvancedContainer" style="display:none; margin-top:4px;"></div>
 
-            <div class="muted" style="font-size:0.78rem; margin-top:4px;">
-              <b>Simple tab:</b> each token uses exactly one generator.<br>
-              <b>Advanced tab:</b> each token can use multiple generators; one is chosen at random each time.
+            <div class="muted" style="font-size:0.75rem; margin-top:4px;">
+              <b>Advanced mode tips:</b>  
+              • Start typing to search your list generators.  
+              • Click a result to add it as a chip.  
+              • Click ✕ on a chip to remove it.
             </div>
 
-            <div class="row" style="margin-top:8px;">
+            <div class="row" style="margin-top:6px;">
               <button id="advSaveBtn" class="btn-primary btn-small">Save template & mappings</button>
               <button id="advDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
             </div>
@@ -1758,7 +1816,7 @@
         const advDeleteBtn = panel.querySelector("#advDeleteBtn");
         const advTabs = panel.querySelectorAll(".adv-tab");
 
-        let advMode = "simple"; // which tab's mapping to use for generation
+        let advMode = "simple";
 
         function setAdvMode(mode) {
           advMode = mode === "advanced" ? "advanced" : "simple";
@@ -1826,6 +1884,29 @@
           });
         }
 
+        function refreshAdvancedSelectedChips(wrapper, selectedIds, listGenerators) {
+          const chipsContainer = wrapper.querySelector(".adv-selected-chips");
+          chipsContainer.innerHTML = "";
+          const frag = document.createDocumentFragment();
+
+          selectedIds.forEach(id => {
+            const g = listGenerators.find(x => x.id === id);
+            if (!g) return;
+            const span = document.createElement("span");
+            span.className = "adv-chip";
+            span.dataset.id = id;
+            span.textContent = g.name;
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "adv-chip-remove";
+            btn.textContent = "✕";
+            span.appendChild(btn);
+            frag.appendChild(span);
+          });
+
+          chipsContainer.appendChild(frag);
+        }
+
         function renderTokenMappingsAdvanced(tokens, map) {
           if (!tokens.length) {
             advTokensAdvancedContainer.innerHTML = `<div class="muted" style="margin-top:4px;">No tokens to configure yet. Once you add <code>{Token}</code> placeholders and save, you can assign multiple generators per token here.</div>`;
@@ -1833,13 +1914,15 @@
           }
           const gensAll = loadGenerators();
           const listGenerators = gensAll.filter(g => g.type === "list");
+          advTokensAdvancedContainer.__listGenerators = listGenerators;
+
           const table = document.createElement("table");
           table.className = "token-table";
           table.innerHTML = `
             <thead>
               <tr>
                 <th style="width:20%;">Token</th>
-                <th>Allowed generators (multi-select)</th>
+                <th>Allowed generators (search & click)</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -1848,34 +1931,109 @@
 
           tokens.forEach(token => {
             const tr = document.createElement("tr");
-            const optionsHtml = listGenerators
-              .map(g => `<option value="${g.id}">${g.name}</option>`)
-              .join("");
-            tr.innerHTML = `
-              <td>{${token}}</td>
-              <td>
-                <select multiple class="adv-token-multi-select" data-token="${token}">
-                  ${optionsHtml}
-                </select>
-              </td>
+            const tdToken = document.createElement("td");
+            tdToken.textContent = `{${token}}`;
+            const tdUi = document.createElement("td");
+
+            const wrapper = document.createElement("div");
+            wrapper.className = "adv-token-advanced";
+            wrapper.dataset.token = token;
+
+            wrapper.innerHTML = `
+              <div class="adv-selected-chips"></div>
+              <input type="text" class="adv-search-input" placeholder="Search generators...">
+              <div class="adv-search-results muted">Type to search your list generators…</div>
             `;
+
+            tdUi.appendChild(wrapper);
+            tr.appendChild(tdToken);
+            tr.appendChild(tdUi);
             tbody.appendChild(tr);
           });
 
           advTokensAdvancedContainer.innerHTML = "";
           advTokensAdvancedContainer.appendChild(table);
 
-          const multiSelects = advTokensAdvancedContainer.querySelectorAll(".adv-token-multi-select");
-          multiSelects.forEach(sel => {
-            const tok = sel.dataset.token;
-            const arr = Array.isArray(map[tok]) ? map[tok] : [];
-            Array.from(sel.options).forEach(opt => {
-              opt.selected = arr.includes(opt.value);
-            });
+          // Initialize chips from existing map
+          tokens.forEach(token => {
+            const wrapper = advTokensAdvancedContainer.querySelector(`.adv-token-advanced[data-token="${token}"]`);
+            if (!wrapper) return;
+            const selectedIds = Array.isArray(map[token]) ? map[token] : [];
+            refreshAdvancedSelectedChips(wrapper, selectedIds, listGenerators);
           });
         }
 
-        // initial UI state
+        function handleAdvancedSearchInput(e) {
+          const input = e.target;
+          if (!input.classList.contains("adv-search-input")) return;
+          const wrapper = input.closest(".adv-token-advanced");
+          if (!wrapper) return;
+
+          const listGenerators = advTokensAdvancedContainer.__listGenerators || [];
+          const resultsDiv = wrapper.querySelector(".adv-search-results");
+          const q = (input.value || "").trim().toLowerCase();
+
+          const selectedIds = Array.from(wrapper.querySelectorAll(".adv-chip"))
+            .map(chip => chip.dataset.id);
+
+          if (!q) {
+            resultsDiv.textContent = "Type to search your list generators…";
+            return;
+          }
+
+          const matches = listGenerators
+            .filter(g => g.name.toLowerCase().includes(q) && !selectedIds.includes(g.id))
+            .slice(0, 10);
+
+          if (!matches.length) {
+            resultsDiv.textContent = "No matches.";
+            return;
+          }
+
+          resultsDiv.innerHTML = "";
+          const frag = document.createDocumentFragment();
+          matches.forEach(g => {
+            const div = document.createElement("div");
+            div.className = "adv-search-item";
+            div.dataset.id = g.id;
+            div.textContent = g.name;
+            frag.appendChild(div);
+          });
+          resultsDiv.appendChild(frag);
+        }
+
+        function handleAdvancedClick(e) {
+          const listGenerators = advTokensAdvancedContainer.__listGenerators || [];
+
+          const removeBtn = e.target.closest(".adv-chip-remove");
+          if (removeBtn) {
+            const chip = removeBtn.closest(".adv-chip");
+            const wrapper = removeBtn.closest(".adv-token-advanced");
+            if (!chip || !wrapper) return;
+            chip.remove();
+            return;
+          }
+
+          const searchItem = e.target.closest(".adv-search-item");
+          if (searchItem) {
+            const wrapper = searchItem.closest(".adv-token-advanced");
+            if (!wrapper) return;
+            const id = searchItem.dataset.id;
+            const selectedIds = Array.from(wrapper.querySelectorAll(".adv-chip"))
+              .map(chip => chip.dataset.id);
+            if (!selectedIds.includes(id)) {
+              selectedIds.push(id);
+            }
+            refreshAdvancedSelectedChips(wrapper, selectedIds, listGenerators);
+
+            const input = wrapper.querySelector(".adv-search-input");
+            const resultsDiv = wrapper.querySelector(".adv-search-results");
+            if (input) input.value = "";
+            if (resultsDiv) resultsDiv.textContent = "Type to search your list generators…";
+            return;
+          }
+        }
+
         renderTokenMappingsSimple(allTokens, simpleTokenMap);
         renderTokenMappingsAdvanced(allTokens, multiTokenMap);
         setAdvMode("simple");
@@ -1891,6 +2049,9 @@
             setAdvMode(btn.dataset.mode);
           });
         });
+
+        advTokensAdvancedContainer.addEventListener("input", handleAdvancedSearchInput);
+        advTokensAdvancedContainer.addEventListener("click", handleAdvancedClick);
 
         advSaveBtn.addEventListener("click", () => {
           const rawPatterns = (advPatternsInput.value || "")
@@ -1914,12 +2075,13 @@
           });
 
           const multiMapNew = {};
-          const multiSelects = advTokensAdvancedContainer.querySelectorAll(".adv-token-multi-select");
-          multiSelects.forEach(sel => {
-            const tok = sel.dataset.token;
-            const values = Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean);
-            if (tok && values.length) {
-              multiMapNew[tok] = values;
+          const wrappers = advTokensAdvancedContainer.querySelectorAll(".adv-token-advanced");
+          wrappers.forEach(wrapper => {
+            const tok = wrapper.dataset.token;
+            const chips = wrapper.querySelectorAll(".adv-chip");
+            const ids = Array.from(chips).map(chip => chip.dataset.id).filter(Boolean);
+            if (tok && ids.length) {
+              multiMapNew[tok] = ids;
             }
           });
 
@@ -2015,13 +2177,9 @@
         return;
       }
 
-      // fallback
       panel.innerHTML = `<div class="muted">Unknown generator type.</div>`;
     }
 
-    // --------------------------------
-    // CREATE / EDIT GENERATOR BOX
-    // --------------------------------
     function openNewGeneratorBox() {
       editingGeneratorId = null;
       const box = document.getElementById("generatorCreateBox");
@@ -2187,7 +2345,6 @@
             parsed.duplicates > 0 ? parsed.duplicates + " duplicates removed." : "No duplicates detected."
           }`;
         } else {
-          // advanced: folder/name updated; template edited in main panel
           saveGenerators(gens);
           msg.classList.remove("danger");
           msg.textContent = `Updated “${name}” (advanced generator). Edit patterns & mappings in the main panel.`;
@@ -2196,7 +2353,6 @@
         activeGenerator = { id: editingGeneratorId };
         editingGeneratorId = null;
       } else {
-        // new generator
         if (typeValue === "advanced") {
           const id = "gen-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
           gens.push({
@@ -2258,9 +2414,6 @@
       }
     }
 
-    // --------------------------------
-    // DB DOWNLOAD (full)
-    // --------------------------------
     function handleDownloadDatabase() {
       const gens = loadGenerators();
       const dataStr = JSON.stringify(gens, null, 2);
@@ -2275,9 +2428,6 @@
       URL.revokeObjectURL(url);
     }
 
-    // --------------------------------
-    // NAV CLICK HANDLER (folders & gens)
-    // --------------------------------
     function handleNavClick(event) {
       const renameBtn = event.target.closest(".folder-rename-btn");
       if (renameBtn) {
@@ -2334,9 +2484,6 @@
       }
     }
 
-    // --------------------------------
-    // INITIAL LOAD: seed if empty
-    // --------------------------------
     async function initApp() {
       folderState = loadFolderState();
 
@@ -2351,9 +2498,6 @@
       populateFolderSelect("General");
     }
 
-    // --------------------------------
-    // INIT
-    // --------------------------------
     document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("generatorNav").addEventListener("click", handleNavClick);
       document.getElementById("addGeneratorBtn").addEventListener("click", openNewGeneratorBox);
@@ -2367,7 +2511,6 @@
         folderSelect.addEventListener("change", handleFolderSelectChange);
       }
 
-      // Search bar event
       const searchInput = document.getElementById("generatorSearchInput");
       if (searchInput) {
         searchInput.addEventListener("input", (e) => {
@@ -2376,7 +2519,6 @@
         });
       }
 
-      // Text cleaner toggle
       const toggleCleanerBtn = document.getElementById("toggleTextCleanerBtn");
       const cleanerBody = document.getElementById("textCleanerBody");
       if (toggleCleanerBtn && cleanerBody) {
@@ -2387,7 +2529,6 @@
         });
       }
 
-      // Text cleaner events
       const cleanRunBtn = document.getElementById("cleanRunBtn");
       const cleanCopyBtn = document.getElementById("cleanCopyBtn");
       const cleanInput = document.getElementById("cleanInput");
