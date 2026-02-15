@@ -176,6 +176,7 @@
       flex-direction: column;
       gap: 6px;
       min-height: 0;
+      overflow-y: auto;
     }
 
     .sidebar-section {
@@ -189,8 +190,7 @@
     }
 
     #sidebarGeneratorsSection {
-      flex: 1;
-      min-height: 0;
+      flex: 0 0 auto;
     }
 
     .sidebar-header {
@@ -236,15 +236,11 @@
     }
 
     .nav-scroll {
-      flex: 1;
-      overflow-y: auto;
       margin-top: 4px;
       padding: 0 2px;
     }
 
     .tools-nav {
-      max-height: 120px;
-      overflow-y: auto;
       margin-top: 4px;
       padding: 0 2px;
     }
@@ -382,13 +378,6 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-    }
-
-    .generator-title-main {
-      font-size: 0.95rem;
-      font-weight: 600;
-      margin-bottom: 2px;
-      color: var(--accent-strong);
     }
 
     .row {
@@ -636,6 +625,9 @@
       padding: 6px 8px;
       font-size: 0.78rem;
       margin-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
     .toolbox-header {
@@ -652,18 +644,21 @@
     }
 
     .toolbox-body {
-      margin-top: 4px;
+      margin-top: 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
     .toolbox-row {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 4px;
       margin-top: 4px;
     }
 
     .toolbox-col textarea {
-      min-height: 60px;
+      min-height: 80px;
       font-size: 0.78rem;
     }
 
@@ -707,6 +702,10 @@
     .generator-create-title {
       font-size: 0.9rem;
       color: var(--accent-strong);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
     }
 
     .generator-create-body {
@@ -718,10 +717,6 @@
     .items-expanded {
       max-height: 260px;
       min-height: 160px;
-    }
-
-    #toolPanels .toolbox {
-      display: none;
     }
 
     @media (max-width: 960px) {
@@ -792,7 +787,7 @@
           <div id="generatorNav" class="nav-scroll"></div>
         </div>
 
-        <!-- Tools box -->
+        <!-- Tools box, directly under generators -->
         <div id="sidebarToolsSection" class="sidebar-section">
           <div class="sidebar-header">
             <div>
@@ -807,49 +802,15 @@
             placeholder="Search tools..."
           />
           <div id="toolsNav" class="tools-nav"></div>
-          <div id="toolPanels">
-            <!-- Text Cleaner tool panel -->
-            <div class="toolbox" data-tool-id="textCleaner">
-              <div class="toolbox-header">
-                <div class="toolbox-title">
-                  Text Cleaner • list formatting helper
-                </div>
-              </div>
-              <div class="toolbox-body">
-                <div class="muted">
-                  Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) below,
-                  click <b>Clean text</b>, then copy the cleaned list for your generators.
-                </div>
-                <div class="toolbox-row">
-                  <div class="toolbox-col">
-                    <label for="cleanInput">Raw text</label>
-                    <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
-                  </div>
-                  <div class="toolbox-col">
-                    <label for="cleanOutput">Cleaned · one item per line</label>
-                    <textarea id="cleanOutput" readonly></textarea>
-                  </div>
-                </div>
-                <div class="row" style="margin-top:4px;">
-                  <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
-                    Clean text
-                  </button>
-                  <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
-                    Copy cleaned text
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </aside>
 
-      <!-- RIGHT: Active generator -->
+      <!-- RIGHT: Active generator or tool -->
       <section class="main-panel">
         <div class="generator-panel-wrapper">
-          <div id="activeGeneratorLabel">No generator selected</div>
+          <div id="activeGeneratorLabel">No generator or tool selected</div>
           <div id="generatorPanel">
-            <div class="muted">Choose a generator from the left, or click ＋ to create one.</div>
+            <div class="muted">Choose a generator or tool from the left, or click ＋ to create a new generator.</div>
           </div>
         </div>
       </section>
@@ -935,7 +896,10 @@
   <div id="advTemplateBox" class="generator-create-box">
     <div class="generator-create-inner">
       <div class="generator-create-header">
-        <div id="advTemplateTitle" class="generator-create-title">Edit Template</div>
+        <div class="generator-create-title">
+          <span id="advTemplateTitle">Edit Template</span>
+          <button id="advTemplateHelpBtn" class="btn-secondary btn-small" type="button">?</button>
+        </div>
         <button id="advTemplateCloseBtn" class="btn-secondary btn-small" type="button">
           ✕ Close
         </button>
@@ -1431,7 +1395,7 @@
             item.className = "nav-generator";
             item.dataset.id = gen.id;
 
-            const isActive = activeGenerator && activeGenerator.id === gen.id;
+            const isActive = activeGenerator && activeGenerator.id === gen.id && !activeToolId;
             if (isActive) item.classList.add("active");
 
             item.innerHTML = `<span class="name">${gen.name}</span>`;
@@ -1468,34 +1432,106 @@
           nav.appendChild(div);
         });
       }
-
-      updateToolPanelsVisibility();
     }
 
-    function updateToolPanelsVisibility() {
-      const panels = document.querySelectorAll("#toolPanels .toolbox");
-      const visibleIds = Array.from(document.querySelectorAll("#toolsNav .nav-tool"))
-        .map(el => el.dataset.id);
-
-      panels.forEach(p => {
-        const id = p.dataset.toolId;
-        if (visibleIds.includes(id) && id === activeToolId) {
-          p.style.display = "block";
-        } else {
-          p.style.display = "none";
-        }
-      });
-    }
-
-    function renderActiveGeneratorPanel() {
+    function renderToolPanel(toolId) {
       const label = document.getElementById("activeGeneratorLabel");
       const panel = document.getElementById("generatorPanel");
       panel.innerHTML = "";
       panel.removeEventListener("click", handleCopyClick);
 
+      const tool = toolsConfig.find(t => t.id === toolId);
+      label.textContent = tool ? tool.name : "Tool";
+
+      if (toolId === "textCleaner") {
+        panel.innerHTML = `
+          <div class="toolbox">
+            <div class="toolbox-header">
+              <div class="toolbox-title">Text Cleaner • list formatting helper</div>
+              <button id="toolCloseBtn" class="btn-secondary btn-small" type="button">Close tool</button>
+            </div>
+            <div class="toolbox-body">
+              <div class="muted">
+                Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) below,
+                click <b>Clean text</b>, then copy the cleaned list for your generators.
+              </div>
+              <div class="toolbox-row">
+                <div class="toolbox-col">
+                  <label for="cleanInput">Raw text</label>
+                  <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
+                </div>
+                <div class="toolbox-col">
+                  <label for="cleanOutput">Cleaned · one item per line</label>
+                  <textarea id="cleanOutput" readonly></textarea>
+                </div>
+              </div>
+              <div class="row" style="margin-top:4px;">
+                <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
+                  Clean text
+                </button>
+                <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
+                  Copy cleaned text
+                </button>
+              </div>
+              <div id="copyMessage" class="copy-tip">Click an item or use “Copy cleaned text”.</div>
+            </div>
+          </div>
+        `;
+
+        const cleanRunBtn = panel.querySelector("#cleanRunBtn");
+        const cleanCopyBtn = panel.querySelector("#cleanCopyBtn");
+        const toolCloseBtn = panel.querySelector("#toolCloseBtn");
+        const cleanInput = panel.querySelector("#cleanInput");
+        const cleanOutput = panel.querySelector("#cleanOutput");
+
+        if (cleanRunBtn && cleanInput && cleanOutput) {
+          cleanRunBtn.addEventListener("click", () => {
+            const raw = cleanInput.value || "";
+            const cleaned = cleanTextForGenerator(raw);
+            cleanOutput.value = cleaned;
+          });
+
+          cleanCopyBtn.addEventListener("click", () => {
+            const val = cleanOutput.value || "";
+            if (!val.trim()) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(val)
+                .then(() => showCopyMessage(val.split("\n")[0] + (val.includes("\n") ? " ..." : "")))
+                .catch(() => showCopyMessage("Cleaned text"));
+            } else {
+              showCopyMessage("Cleaned text");
+            }
+          });
+        }
+
+        if (toolCloseBtn) {
+          toolCloseBtn.addEventListener("click", () => {
+            activeToolId = null;
+            renderToolsNav();
+            renderMainPanel();
+          });
+        }
+
+        return;
+      }
+
+      panel.innerHTML = `<div class="muted">Tool not implemented yet.</div>`;
+    }
+
+    function renderMainPanel() {
+      const label = document.getElementById("activeGeneratorLabel");
+      const panel = document.getElementById("generatorPanel");
+      panel.innerHTML = "";
+      panel.removeEventListener("click", handleCopyClick);
+
+      if (activeToolId) {
+        renderToolPanel(activeToolId);
+        return;
+      }
+
       if (!activeGenerator) {
-        label.textContent = "No generator selected";
-        panel.innerHTML = `<div class="muted">Choose a generator from the left, or click ＋ to create one.</div>`;
+        label.textContent = "No generator or tool selected";
+        panel.innerHTML = `<div class="muted">Choose a generator or tool from the left, or click ＋ to create a new generator.</div>`;
         return;
       }
 
@@ -1507,15 +1543,12 @@
         return;
       }
 
-      label.textContent = gen.name;
+      label.textContent = `${gen.name} · ${gen.folder || "General"}`;
 
       if (gen.type === "list") {
         panel.innerHTML = `
-          <div class="generator-title-main">
-            ${gen.name}
-          </div>
-          <div class="muted" style="margin-bottom:8px;">
-            Folder: ${gen.folder || "General"} · ${gen.items.length} items in pool.
+          <div class="muted" style="margin-bottom:4px;">
+            List generator · ${gen.items.length} items in pool.
           </div>
           <div class="row">
             <div class="col">
@@ -1574,7 +1607,7 @@
             activeGenerator = null;
           }
           renderGeneratorNav();
-          renderActiveGeneratorPanel();
+          renderMainPanel();
         });
 
         return;
@@ -1582,11 +1615,8 @@
 
       if (gen.type === "lexicon") {
         panel.innerHTML = `
-          <div class="generator-title-main">
-            ${gen.name}
-          </div>
-          <div class="muted" style="margin-bottom:8px;">
-            Folder: ${gen.folder || "General"} · ${gen.items.length} lexicon entries.
+          <div class="muted" style="margin-bottom:4px;">
+            Lexicon · ${gen.items.length} entries.
           </div>
 
           <div class="row">
@@ -1691,12 +1721,8 @@
         const patternsText = patterns.join("\n");
 
         panel.innerHTML = `
-          <div class="generator-title-main">
-            ${gen.name}
-          </div>
-          <div class="muted" style="margin-bottom:8px;">
-            Advanced generator that stitches together outputs from your other generators using <code>{Tokens}</code>.
-            Use <b>Simple</b> for one generator per token, or <b>Advanced</b> to let a token pull from multiple generators.
+          <div class="muted" style="margin-bottom:4px;">
+            Advanced generator · uses <code>{Tokens}</code> and your other list generators.
           </div>
 
           <div class="row">
@@ -1805,7 +1831,7 @@
             activeGenerator = null;
           }
           renderGeneratorNav();
-          renderActiveGeneratorPanel();
+          renderMainPanel();
         });
 
         return;
@@ -2008,7 +2034,7 @@
         msg.textContent =
           `Appended ${added} entries. ${duplicates > 0 ? duplicates + " duplicate lines removed." : "No duplicates in input."}`;
         renderAllEntriesListLex(merged);
-        renderActiveGeneratorPanel();
+        renderMainPanel();
       });
 
       importBtn.addEventListener("click", () => {
@@ -2074,7 +2100,7 @@
           msg.classList.remove("danger");
           msg.textContent = `Imported ${added} new entries from file.`;
           renderAllEntriesListLex(merged);
-          renderActiveGeneratorPanel();
+          renderMainPanel();
         };
         reader.readAsText(file);
       });
@@ -2109,7 +2135,7 @@
         }
         closeLexManageBox();
         renderGeneratorNav();
-        renderActiveGeneratorPanel();
+        renderMainPanel();
       });
 
       box.style.display = "flex";
@@ -2137,6 +2163,7 @@
       const title = document.getElementById("advTemplateTitle");
       const msg = document.getElementById("advTemplateMessage");
       const body = document.getElementById("advTemplateBody");
+      const helpBtn = document.getElementById("advTemplateHelpBtn");
 
       if (!box || !title || !msg || !body) return;
 
@@ -2153,6 +2180,15 @@
       msg.classList.remove("danger");
 
       body.innerHTML = `
+        <div id="advTemplateHelpBlock" class="muted" style="display:none; font-size:0.78rem; margin-bottom:6px; border:1px solid #232a33; border-radius:8px; padding:6px 8px; background:#05070c;">
+          <b>How this works:</b><br/>
+          • <b>Patterns</b> are sentence-like strings using <code>{Tokens}</code>, e.g. <code>{Name} is a {Race} from {Hometown}</code>.<br/>
+          • Each <code>{Token}</code> pulls from one or more <b>list generators</b> you’ve already created.<br/>
+          • <b>Simple</b> mode: each token is mapped to exactly one list generator.<br/>
+          • <b>Advanced</b> mode: each token can have multiple list generators; on use, one of them is chosen at random.<br/>
+          • You can mix both: use Simple for most tokens, Advanced only where you need variety.
+        </div>
+
         <div class="row">
           <div class="col">
             <label for="advPatternsInput">Patterns (one per line)</label>
@@ -2193,6 +2229,7 @@
       const advTokensAdvancedContainer = body.querySelector("#advTokensAdvancedContainer");
       const advTemplateSaveBtn = body.querySelector("#advTemplateSaveBtn");
       const advTabs = body.querySelectorAll(".adv-tab");
+      const helpBlock = body.querySelector("#advTemplateHelpBlock");
 
       let advMode = savedMode;
 
@@ -2470,8 +2507,15 @@
         msg.classList.remove("danger");
         msg.textContent = `Saved ${rawPatterns.length} pattern(s), ${Object.keys(simpleMapNew).length} simple mapping(s), ${Object.keys(multiMapNew).length} advanced mapping(s), mode: ${advMode}.`;
 
-        renderActiveGeneratorPanel();
+        renderMainPanel();
       });
+
+      if (helpBtn && helpBlock) {
+        helpBtn.onclick = () => {
+          const visible = helpBlock.style.display === "block";
+          helpBlock.style.display = visible ? "none" : "block";
+        };
+      }
 
       box.style.display = "flex";
     }
@@ -2600,7 +2644,7 @@
       }
 
       renderGeneratorNav();
-      renderActiveGeneratorPanel();
+      renderMainPanel();
 
       setTimeout(() => {
         hideGeneratorCreateBox();
@@ -2661,7 +2705,7 @@
         }
 
         renderGeneratorNav();
-        renderActiveGeneratorPanel();
+        renderMainPanel();
         populateFolderSelect(trimmed);
         return;
       }
@@ -2685,16 +2729,26 @@
         const id = genItem.dataset.id;
         if (!id) return;
         activeGenerator = { id };
+        activeToolId = null;
         renderGeneratorNav();
-        renderActiveGeneratorPanel();
+        renderToolsNav();
+        renderMainPanel();
       }
     }
 
     function handleToolsNavClick(event) {
       const item = event.target.closest(".nav-tool");
       if (!item) return;
-      activeToolId = item.dataset.id;
+      const id = item.dataset.id;
+      if (activeToolId === id) {
+        activeToolId = null;
+      } else {
+        activeToolId = id;
+        activeGenerator = null;
+      }
       renderToolsNav();
+      renderGeneratorNav();
+      renderMainPanel();
     }
 
     async function initApp() {
@@ -2707,9 +2761,9 @@
       }
 
       renderGeneratorNav();
-      renderActiveGeneratorPanel();
-      populateFolderSelect("General");
       renderToolsNav();
+      renderMainPanel();
+      populateFolderSelect("General");
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -2746,32 +2800,6 @@
       const toolsNavEl = document.getElementById("toolsNav");
       if (toolsNavEl) {
         toolsNavEl.addEventListener("click", handleToolsNavClick);
-      }
-
-      // Text cleaner events
-      const cleanRunBtn = document.getElementById("cleanRunBtn");
-      const cleanCopyBtn = document.getElementById("cleanCopyBtn");
-      const cleanInput = document.getElementById("cleanInput");
-      const cleanOutput = document.getElementById("cleanOutput");
-
-      if (cleanRunBtn && cleanInput && cleanOutput) {
-        cleanRunBtn.addEventListener("click", () => {
-          const raw = cleanInput.value || "";
-          const cleaned = cleanTextForGenerator(raw);
-          cleanOutput.value = cleaned;
-        });
-
-        cleanCopyBtn.addEventListener("click", () => {
-          const val = cleanOutput.value || "";
-          if (!val.trim()) return;
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(val)
-              .then(() => showCopyMessage(val.split("\n")[0] + (val.includes("\n") ? " ..." : "")))
-              .catch(() => showCopyMessage("Cleaned text"));
-          } else {
-            showCopyMessage("Cleaned text");
-          }
-        });
       }
 
       // Lexicon manage close
