@@ -394,8 +394,9 @@
 
             <div class="row">
               <div class="col">
-                <label for="genFolderInput">Folder name</label>
-                <input id="genFolderInput" type="text" placeholder="e.g. Lexicons, Names, Taverns" value="General">
+                <label for="genFolderSelect">Folder</label>
+                <select id="genFolderSelect"></select>
+                <input id="genFolderNewInput" type="text" placeholder="New folder name" style="display:none; margin-top:4px;">
               </div>
               <div class="col">
                 <label for="genNameInput">Generator name</label>
@@ -470,7 +471,7 @@
     let itemsExpanded = false;
 
     // --------------------------------
-    // VALATHI LEXICON SEED (for default translator)
+    // VALATHI LEXICON SEED
     // --------------------------------
     const valathiLexiconSeed = [
       { english: "high, noble, elevated, bright", valathi: "val" },
@@ -527,7 +528,7 @@
     }
 
     // --------------------------------
-    // BUILT-IN LOGIC (elf names & book titles) - UI treats them as normal generators
+    // BUILT-IN LOGIC (elf names & book titles)
     // --------------------------------
     const elfStartsClassic = [
       "Val", "Ves", "Vor", "Vrae", "Sel", "Thal", "Mir", "Nor", "Lae", "Vel", "Vyn", "Maer"
@@ -607,7 +608,7 @@
       const adj = rand(bookAdjCommon);
       const noun1 = rand(bookNounCommon);
       const noun2 = rand(bookNounCommon.filter(n => n !== noun1));
-      const ofPhrase = rand(bookOfPhrases);
+      const ofPhrase = bookOfPhrases[Math.floor(Math.random() * bookOfPhrases.length)];
 
       if (flavor === "common") {
         if (pattern === 0) {
@@ -675,9 +676,7 @@
         return parsed.map(g => ({
           ...g,
           type: g.type || "list",
-          items: g.type === "lexicon"
-            ? (Array.isArray(g.items) ? g.items : [])
-            : (Array.isArray(g.items) ? g.items : [])
+          items: Array.isArray(g.items) ? g.items : []
         }));
       } catch {
         const seeded = seedInitialGenerators();
@@ -726,7 +725,6 @@
         let english = "";
         let valathi = "";
 
-        // support "english = valathi" or "english - valathi"
         const eqIdx = t.indexOf("=");
         const dashIdx = (eqIdx === -1) ? t.indexOf("-") : -1;
 
@@ -737,7 +735,6 @@
           english = t.slice(0, dashIdx).trim();
           valathi = t.slice(dashIdx + 1).trim();
         } else {
-          // if only one word, treat as english and valathi the same
           english = t;
           valathi = t;
         }
@@ -771,6 +768,70 @@
         }
       }
       return Array.from(map.values());
+    }
+
+    // --------------------------------
+    // FOLDER SELECT (new behavior)
+    // --------------------------------
+    function populateFolderSelect(selectedFolder) {
+      const select = document.getElementById("genFolderSelect");
+      if (!select) return;
+
+      const gens = loadGenerators();
+      const folderSet = new Set();
+
+      gens.forEach(g => {
+        const f = g.folder || "General";
+        folderSet.add(f);
+      });
+
+      const folderNames = Array.from(folderSet).sort((a, b) => a.localeCompare(b));
+
+      // if selected folder doesn't exist yet (e.g. editing), include it
+      if (selectedFolder && selectedFolder !== "__new__" && !folderSet.has(selectedFolder)) {
+        folderNames.push(selectedFolder);
+      }
+
+      select.innerHTML = "";
+
+      // add existing folders
+      folderNames.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        select.appendChild(opt);
+      });
+
+      // + new folder option
+      const optNew = document.createElement("option");
+      optNew.value = "__new__";
+      optNew.textContent = "+ New folder…";
+      select.appendChild(optNew);
+
+      // set selected value
+      if (selectedFolder && selectedFolder !== "__new__" && folderNames.includes(selectedFolder)) {
+        select.value = selectedFolder;
+      } else if (folderNames.length > 0) {
+        select.value = folderNames[0];
+      } else {
+        // no existing folders: default to new
+        select.value = "__new__";
+      }
+
+      handleFolderSelectChange(); // ensure new-folder input visibility is correct
+    }
+
+    function handleFolderSelectChange() {
+      const select = document.getElementById("genFolderSelect");
+      const newInput = document.getElementById("genFolderNewInput");
+      if (!select || !newInput) return;
+
+      if (select.value === "__new__") {
+        newInput.style.display = "block";
+      } else {
+        newInput.style.display = "none";
+        newInput.value = "";
+      }
     }
 
     // --------------------------------
@@ -957,7 +1018,7 @@
         return;
       }
 
-      // LEXICON TRANSLATOR (Valathi-style, default lexicon UI)
+      // LEXICON TRANSLATOR
       if (gen.type === "lexicon") {
         panel.innerHTML = `
           <div class="generator-title-main">
@@ -1211,7 +1272,7 @@
           URL.revokeObjectURL(url);
         });
 
-        // Open raw editor (uses the left-side create box)
+        // Open raw editor (left create box)
         lexOpenEditBtn.addEventListener("click", () => {
           openEditGeneratorBox(gen.id);
         });
@@ -1296,14 +1357,15 @@
       editingGeneratorId = null;
       const box = document.getElementById("generatorCreateBox");
       const msg = document.getElementById("generatorCreateMessage");
-      const folderInput = document.getElementById("genFolderInput");
       const nameInput   = document.getElementById("genNameInput");
       const itemsInput  = document.getElementById("genItemsInput");
       const saveBtn     = document.getElementById("saveGeneratorBtn");
       const expandBtn   = document.getElementById("expandItemsBtn");
       const typeInput   = document.getElementById("genTypeInput");
+      const newFolderInput = document.getElementById("genFolderNewInput");
 
-      folderInput.value = "General";
+      populateFolderSelect("General");
+
       nameInput.value = "";
       itemsInput.value = "";
       itemsInput.classList.remove("items-expanded");
@@ -1314,6 +1376,8 @@
       saveBtn.textContent = "Save generator";
       typeInput.disabled = false;
       typeInput.value = "list";
+      newFolderInput.value = "";
+      newFolderInput.style.display = "none";
 
       box.style.display = "block";
     }
@@ -1326,17 +1390,17 @@
       editingGeneratorId = genId;
       const box = document.getElementById("generatorCreateBox");
       const msg = document.getElementById("generatorCreateMessage");
-      const folderInput = document.getElementById("genFolderInput");
       const nameInput   = document.getElementById("genNameInput");
       const itemsInput  = document.getElementById("genItemsInput");
       const saveBtn     = document.getElementById("saveGeneratorBtn");
       const expandBtn   = document.getElementById("expandItemsBtn");
       const typeInput   = document.getElementById("genTypeInput");
+      const newFolderInput = document.getElementById("genFolderNewInput");
 
-      folderInput.value = gen.folder || "General";
+      populateFolderSelect(gen.folder || "General");
+
       nameInput.value   = gen.name || "";
 
-      // For lexicon, show "english = valathi" lines
       if (gen.type === "lexicon") {
         const arr = Array.isArray(gen.items) ? gen.items : [];
         itemsInput.value = arr.map(e => `${e.english} = ${e.valathi}`).join("\n");
@@ -1354,7 +1418,9 @@
       saveBtn.textContent = "Save changes";
 
       typeInput.disabled = true;
-      typeInput.value = gen.type === "lexicon" ? "lexicon" : "list";
+      typeInput.value = gen.type === "lexicon" ? "lexicon" : (gen.type === "list" ? "list" : "list");
+      newFolderInput.value = "";
+      newFolderInput.style.display = "none";
 
       box.style.display = "block";
     }
@@ -1362,27 +1428,40 @@
     function hideGeneratorCreateBox() {
       const box = document.getElementById("generatorCreateBox");
       const msg = document.getElementById("generatorCreateMessage");
+      const itemsInput  = document.getElementById("genItemsInput");
+      const expandBtn   = document.getElementById("expandItemsBtn");
+      const newFolderInput = document.getElementById("genFolderNewInput");
+
       document.getElementById("genNameInput").value = "";
-      document.getElementById("genItemsInput").value = "";
+      itemsInput.value = "";
       msg.textContent = "";
       msg.classList.remove("danger");
       editingGeneratorId = null;
-      const itemsInput  = document.getElementById("genItemsInput");
-      const expandBtn   = document.getElementById("expandItemsBtn");
+
       itemsInput.classList.remove("items-expanded");
       itemsExpanded = false;
       expandBtn.textContent = "Expand list editor";
+      newFolderInput.value = "";
+      newFolderInput.style.display = "none";
+
       box.style.display = "none";
     }
 
     function handleSaveGenerator() {
-      const folderInput = document.getElementById("genFolderInput");
+      const folderSelect = document.getElementById("genFolderSelect");
+      const folderNewInput = document.getElementById("genFolderNewInput");
       const nameInput   = document.getElementById("genNameInput");
       const itemsInput  = document.getElementById("genItemsInput");
       const msg         = document.getElementById("generatorCreateMessage");
       const typeInput   = document.getElementById("genTypeInput");
 
-      const folder = (folderInput.value || "").trim() || "General";
+      let folder = "";
+      if (folderSelect.value === "__new__") {
+        folder = (folderNewInput.value || "").trim() || "General";
+      } else {
+        folder = folderSelect.value || "General";
+      }
+
       const name   = (nameInput.value || "").trim();
       const raw    = itemsInput.value || "";
 
@@ -1500,6 +1579,14 @@
       document.getElementById("cancelGeneratorBtn").addEventListener("click", hideGeneratorCreateBox);
       document.getElementById("saveGeneratorBtn").addEventListener("click", handleSaveGenerator);
       document.getElementById("expandItemsBtn").addEventListener("click", toggleItemsExpand);
+
+      const folderSelect = document.getElementById("genFolderSelect");
+      if (folderSelect) {
+        folderSelect.addEventListener("change", handleFolderSelectChange);
+      }
+
+      // Make sure folder dropdown has something even before first open
+      populateFolderSelect("General");
     });
   </script>
 </body>
