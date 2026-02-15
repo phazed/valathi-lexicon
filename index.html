@@ -35,7 +35,7 @@
     }
 
     .app-shell {
-      max-width: 900px;
+      max-width: 1200px;
       width: 100%;
       padding: 24px;
     }
@@ -116,7 +116,7 @@
 
     textarea {
       resize: vertical;
-      min-height: 60px;
+      min-height: 120px;
     }
 
     button {
@@ -219,13 +219,45 @@
       color: var(--danger);
     }
 
+    /* Layout: left nav, right panel */
+    .hub-body {
+      display: flex;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    .nav-column {
+      width: 280px;
+      min-width: 240px;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .detail-column {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (max-width: 900px) {
+      .hub-body {
+        flex-direction: column;
+      }
+      .nav-column {
+        width: 100%;
+        max-width: 100%;
+      }
+    }
+
     /* NAV AREA (folders + generators) */
     .nav-area {
       border-radius: 12px;
       border: 1px solid rgba(60,60,60,0.9);
       background: linear-gradient(180deg, rgba(10,10,10,0.98), rgba(5,5,5,0.98));
       padding: 6px 8px;
-      max-height: 260px;
+      max-height: 360px;
       overflow-y: auto;
       margin-top: 8px;
       margin-bottom: 12px;
@@ -246,7 +278,7 @@
       cursor: pointer;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 6px;
       margin: 2px 2px;
       border: 1px solid transparent;
@@ -258,14 +290,6 @@
       text-overflow: ellipsis;
     }
 
-    .nav-generator span.badge {
-      font-size: 0.7rem;
-      padding: 1px 6px;
-      border-radius: 999px;
-      border: 1px solid rgba(90,90,90,0.9);
-      color: var(--muted);
-    }
-
     .nav-generator:hover {
       border-color: var(--border);
       background: rgba(255,255,255,0.03);
@@ -274,6 +298,11 @@
     .nav-generator.active {
       border-color: var(--accent);
       background: rgba(255,255,255,0.06);
+    }
+
+    .folder-badge {
+      font-size: 0.75rem;
+      opacity: 0.8;
     }
 
     /* Create / edit box */
@@ -304,26 +333,13 @@
       gap: 8px;
     }
 
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(200,200,200,0.45);
-      color: var(--accent);
-    }
-
     .generated-list {
       margin-top: 8px;
       padding: 6px 8px;
       border-radius: 10px;
       border: 1px solid rgba(45,45,45,0.9);
       background: rgba(8,8,8,0.98);
-      max-height: 160px;
+      max-height: 220px;
       overflow-y: auto;
       font-size: 0.88rem;
     }
@@ -342,6 +358,11 @@
       font-size: 0.78rem;
       color: var(--muted);
     }
+
+    .items-expanded {
+      min-height: 260px !important;
+      max-height: 70vh;
+    }
   </style>
 </head>
 <body>
@@ -352,70 +373,77 @@
         Vrahune Generator Hub
       </h1>
       <div class="subtitle">
-        Folder-based generators for names, lexicons, taverns, whatever you like. Click a generator to open it.
+        Left: folders & generators (including your lexicons). Right: controls & results for the selected generator.
       </div>
 
-      <!-- GENERATOR NAV + CREATE -->
-      <div class="section-title">
-        <span>Generators</span>
-        <button id="addGeneratorBtn" class="btn-secondary btn-icon" title="Create new generator">
-          ＋
-        </button>
-      </div>
-
-      <div id="generatorCreateBox" class="create-box" style="display:none;">
-        <div class="muted" style="margin-bottom:6px;">
-          Create or edit a generator. Items can be names, words, book titles, etc.
-          One per line or comma-separated. Duplicates are removed automatically.
-        </div>
-
-        <div class="row">
-          <div class="col">
-            <label for="genFolderInput">Folder name</label>
-            <input id="genFolderInput" type="text" placeholder="e.g. Lexicons, Names, Taverns" value="General">
+      <div class="hub-body">
+        <!-- LEFT: NAV / FOLDERS -->
+        <div class="nav-column">
+          <div class="section-title">
+            <span>Generators</span>
+            <button id="addGeneratorBtn" class="btn-secondary btn-icon" title="Create new generator">
+              ＋
+            </button>
           </div>
-          <div class="col">
-            <label for="genNameInput">Generator name</label>
-            <input id="genNameInput" type="text" placeholder="e.g. Valathi Lexicon, Tavern Names">
+
+          <div id="generatorCreateBox" class="create-box" style="display:none;">
+            <div class="muted" style="margin-bottom:6px;">
+              Create or edit a generator. Items can be names, lexicon entries, book titles, etc.
+              One per line or comma-separated. Duplicates are removed automatically.
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <label for="genFolderInput">Folder name</label>
+                <input id="genFolderInput" type="text" placeholder="e.g. Lexicons, Names, Taverns" value="General">
+              </div>
+              <div class="col">
+                <label for="genNameInput">Generator name</label>
+                <input id="genNameInput" type="text" placeholder="e.g. Valathi Lexicon, Tavern Names">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col">
+                <label for="genItemsInput">Items list</label>
+                <textarea id="genItemsInput" placeholder="One item per line, or comma-separated..."></textarea>
+                <button type="button" id="expandItemsBtn" class="btn-secondary btn-small" style="margin-top:4px;">
+                  Expand list editor
+                </button>
+              </div>
+            </div>
+
+            <div class="row">
+              <button id="saveGeneratorBtn" class="btn-primary">
+                Save generator
+              </button>
+              <button id="cancelGeneratorBtn" class="btn-secondary">
+                Cancel
+              </button>
+            </div>
+
+            <div id="generatorCreateMessage" class="muted"></div>
+          </div>
+
+          <div id="generatorNav" class="nav-area"></div>
+        </div>
+
+        <!-- RIGHT: ACTIVE GENERATOR PANEL -->
+        <div class="detail-column">
+          <div class="section-title">
+            <span id="activeGeneratorLabel">No generator selected</span>
+          </div>
+
+          <div id="generatorPanel" class="generator-panel">
+            <div class="muted">
+              Choose a generator from the left, or click ＋ to create one. This panel will show its controls and results.
+            </div>
+          </div>
+
+          <div id="copyMessage" class="copy-message">
+            Click any generated item to copy it.
           </div>
         </div>
-
-        <div class="row">
-          <div class="col">
-            <label for="genItemsInput">Items list</label>
-            <textarea id="genItemsInput" placeholder="One item per line, or comma-separated..."></textarea>
-          </div>
-        </div>
-
-        <div class="row">
-          <button id="saveGeneratorBtn" class="btn-primary">
-            Save generator
-          </button>
-          <button id="cancelGeneratorBtn" class="btn-secondary">
-            Cancel
-          </button>
-        </div>
-
-        <div id="generatorCreateMessage" class="muted"></div>
-      </div>
-
-      <div id="generatorNav" class="nav-area"></div>
-
-      <hr>
-
-      <!-- ACTIVE GENERATOR PANEL -->
-      <div class="section-title">
-        <span id="activeGeneratorLabel">No generator selected</span>
-      </div>
-
-      <div id="generatorPanel" class="generator-panel">
-        <div class="muted">
-          Choose a generator from the list above, or click ＋ to create one.
-        </div>
-      </div>
-
-      <div id="copyMessage" class="copy-message">
-        Click any generated item to copy it.
       </div>
     </div>
   </div>
@@ -424,11 +452,14 @@
     // --------------------------------
     // STORAGE & STATE
     // --------------------------------
-    const GEN_STORAGE_KEY = "vrahuneCustomGenerators";
+    const GEN_STORAGE_KEY = "vrahuneGeneratorsV2"; // new key so this version is clean
 
-    // activeGenerator = { kind: "builtin" | "custom", id: string }
+    // generator object: { id, folder, name, type, items[] }
+    // type: "elf", "book", "list" (default list)
+
     let activeGenerator = null;
     let editingGeneratorId = null;
+    let itemsExpanded = false;
 
     // --------------------------------
     // HELPERS
@@ -460,13 +491,8 @@
     }
 
     // --------------------------------
-    // BUILT-IN GENERATORS
+    // BUILT-IN LOGIC (not labeled as built-in in UI)
     // --------------------------------
-    const builtinGenerators = [
-      { id: "elf",  name: "Elf Names (Valathar)", folder: "Built-in" },
-      { id: "book", name: "Book Titles",          folder: "Built-in" }
-    ];
-
     // Elf name parts
     const elfStartsClassic = [
       "Val", "Ves", "Vor", "Vrae", "Sel", "Thal", "Mir", "Nor", "Lae", "Vel", "Vyn", "Maer"
@@ -570,20 +596,67 @@
     }
 
     // --------------------------------
-    // CUSTOM GENERATOR STORAGE
+    // GENERATOR STORAGE
     // --------------------------------
-    function loadCustomGenerators() {
+    function seedInitialGenerators() {
+      // Only called if storage empty
+      return [
+        {
+          id: "gen-elf",
+          folder: "Names",
+          name: "Elf Names (Valathar)",
+          type: "elf",
+          items: []
+        },
+        {
+          id: "gen-book",
+          folder: "Names",
+          name: "Book Titles",
+          type: "book",
+          items: []
+        },
+        {
+          id: "gen-lex-valathi",
+          folder: "Lexicons",
+          name: "Valathi Lexicon",
+          type: "list",
+          items: [
+            "val", "’ath", "anna", "dor", "vor", "mir", "len", "vrae",
+            "sel", "thal", "nor", "sael", "cyn", "Vrahune",
+            "Val’athanna", "Valdora"
+          ]
+        }
+      ];
+    }
+
+    function loadGenerators() {
       try {
         const raw = window.localStorage.getItem(GEN_STORAGE_KEY);
-        if (!raw) return [];
+        if (!raw) {
+          const seeded = seedInitialGenerators();
+          saveGenerators(seeded);
+          return seeded;
+        }
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          const seeded = seedInitialGenerators();
+          saveGenerators(seeded);
+          return seeded;
+        }
+        // Ensure type defaults to "list" if missing (old data)
+        return parsed.map(g => ({
+          ...g,
+          type: g.type || "list",
+          items: Array.isArray(g.items) ? g.items : []
+        }));
       } catch {
-        return [];
+        const seeded = seedInitialGenerators();
+        saveGenerators(seeded);
+        return seeded;
       }
     }
 
-    function saveCustomGenerators(list) {
+    function saveGenerators(list) {
       try {
         window.localStorage.setItem(GEN_STORAGE_KEY, JSON.stringify(list));
       } catch {}
@@ -618,22 +691,13 @@
       const nav = document.getElementById("generatorNav");
       nav.innerHTML = "";
 
-      // Group built-ins by folder (Built-in)
-      const allCustom = loadCustomGenerators();
+      const gens = loadGenerators();
       const folderMap = {};
 
-      // built-ins first
-      builtinGenerators.forEach(b => {
-        const folder = b.folder || "Built-in";
-        if (!folderMap[folder]) folderMap[folder] = [];
-        folderMap[folder].push({ kind: "builtin", id: b.id, name: b.name });
-      });
-
-      // custom
-      allCustom.forEach(gen => {
+      gens.forEach(gen => {
         const folder = gen.folder || "General";
         if (!folderMap[folder]) folderMap[folder] = [];
-        folderMap[folder].push({ kind: "custom", id: gen.id, name: gen.name });
+        folderMap[folder].push(gen);
       });
 
       const folderNames = Object.keys(folderMap).sort((a, b) => a.localeCompare(b));
@@ -646,26 +710,20 @@
       folderNames.forEach(folder => {
         const heading = document.createElement("div");
         heading.className = "nav-folder-heading";
-        heading.textContent = folder;
+        heading.innerHTML = `${folder} <span class="folder-badge">(${folderMap[folder].length})</span>`;
         nav.appendChild(heading);
 
         folderMap[folder]
           .sort((a,b) => a.name.localeCompare(b.name))
-          .forEach(entry => {
+          .forEach(gen => {
             const item = document.createElement("div");
             item.className = "nav-generator";
-            item.dataset.kind = entry.kind;
-            item.dataset.id = entry.id;
+            item.dataset.id = gen.id;
 
-            const isActive = activeGenerator &&
-                             activeGenerator.kind === entry.kind &&
-                             activeGenerator.id === entry.id;
+            const isActive = activeGenerator && activeGenerator.id === gen.id;
             if (isActive) item.classList.add("active");
 
-            item.innerHTML = `
-              <span class="name">${entry.name}</span>
-              <span class="badge">${entry.kind === "builtin" ? "built-in" : "custom"}</span>
-            `;
+            item.innerHTML = `<span class="name">${gen.name}</span>`;
             nav.appendChild(item);
           });
       });
@@ -682,15 +740,25 @@
 
       if (!activeGenerator) {
         label.textContent = "No generator selected";
-        panel.innerHTML = `<div class="muted">Choose a generator from the list above, or click ＋ to create one.</div>`;
+        panel.innerHTML = `<div class="muted">Choose a generator from the left, or click ＋ to create one.</div>`;
         return;
       }
 
-      if (activeGenerator.kind === "builtin" && activeGenerator.id === "elf") {
-        label.textContent = "Elf Names (Valathar)";
+      const gens = loadGenerators();
+      const gen = gens.find(g => g.id === activeGenerator.id);
+      if (!gen) {
+        label.textContent = "Generator not found";
+        panel.innerHTML = `<div class="muted">This generator no longer exists. Choose another one.</div>`;
+        return;
+      }
+
+      label.textContent = `${gen.name} (${gen.folder || "General"})`;
+
+      // Pattern-based: elf
+      if (gen.type === "elf") {
         panel.innerHTML = `
           <div class="generator-title-main">
-            Elf Names <span class="pill">built-in</span>
+            ${gen.name}
           </div>
           <div class="muted" style="margin-bottom:8px;">
             Generates Valathar-style names (classic Valathi or newer, mixed-region vibes).
@@ -716,14 +784,19 @@
               <input id="elfCount" type="number" min="1" max="30" value="10">
             </div>
           </div>
-          <button id="elfGenerateBtn" class="btn-primary">Generate elf names</button>
+          <div class="row">
+            <button id="elfGenerateBtn" class="btn-primary">Generate</button>
+            <button id="elfEditBtn" class="btn-secondary btn-small">Edit generator meta</button>
+          </div>
           <div id="elfResults" class="generated-list" style="margin-top:8px;"></div>
         `;
+
         const btn = panel.querySelector("#elfGenerateBtn");
         const results = panel.querySelector("#elfResults");
         const styleSel = panel.querySelector("#elfStyle");
         const toneSel = panel.querySelector("#elfTone");
         const countInput = panel.querySelector("#elfCount");
+        const editBtn = panel.querySelector("#elfEditBtn");
 
         btn.addEventListener("click", () => {
           const style = styleSel.value;
@@ -742,14 +815,19 @@
         });
 
         results.addEventListener("click", handleCopyClick);
+
+        editBtn.addEventListener("click", () => {
+          openEditGeneratorBox(gen.id);
+        });
+
         return;
       }
 
-      if (activeGenerator.kind === "builtin" && activeGenerator.id === "book") {
-        label.textContent = "Book Titles";
+      // Pattern-based: book
+      if (gen.type === "book") {
         panel.innerHTML = `
           <div class="generator-title-main">
-            Book Titles <span class="pill">built-in</span>
+            ${gen.name}
           </div>
           <div class="muted" style="margin-bottom:8px;">
             Titles for tomes, legends, grimoires. Common tongue or Valathi-flavored.
@@ -767,13 +845,18 @@
               <input id="bookCount" type="number" min="1" max="30" value="10">
             </div>
           </div>
-          <button id="bookGenerateBtn" class="btn-secondary">Generate book titles</button>
+          <div class="row">
+            <button id="bookGenerateBtn" class="btn-primary">Generate</button>
+            <button id="bookEditBtn" class="btn-secondary btn-small">Edit generator meta</button>
+          </div>
           <div id="bookResults" class="generated-list" style="margin-top:8px;"></div>
         `;
+
         const btn = panel.querySelector("#bookGenerateBtn");
         const results = panel.querySelector("#bookResults");
         const flavorSel = panel.querySelector("#bookFlavor");
         const countInput = panel.querySelector("#bookCount");
+        const editBtn = panel.querySelector("#bookEditBtn");
 
         btn.addEventListener("click", () => {
           const flavor = flavorSel.value;
@@ -791,24 +874,18 @@
         });
 
         results.addEventListener("click", handleCopyClick);
+
+        editBtn.addEventListener("click", () => {
+          openEditGeneratorBox(gen.id);
+        });
+
         return;
       }
 
-      // Custom generator
-      const gens = loadCustomGenerators();
-      const gen = gens.find(g => g.id === activeGenerator.id);
-      if (!gen) {
-        label.textContent = "Generator not found";
-        panel.innerHTML = `<div class="muted">This generator no longer exists. Choose another one.</div>`;
-        return;
-      }
-
-      label.textContent = `${gen.name} (${gen.folder || "General"})`;
-
+      // List-based (including Lexicon folder)
       panel.innerHTML = `
         <div class="generator-title-main">
           ${gen.name}
-          <span class="pill">custom</span>
         </div>
         <div class="muted" style="margin-bottom:8px;">
           Folder: ${gen.folder || "General"} · ${gen.items.length} items in pool.
@@ -864,8 +941,8 @@
         const ok = window.confirm(`Delete generator “${gen.name}” from folder “${gen.folder || "General"}”?`);
         if (!ok) return;
         const newList = gens.filter(g => g.id !== gen.id);
-        saveCustomGenerators(newList);
-        if (activeGenerator && activeGenerator.kind === "custom" && activeGenerator.id === gen.id) {
+        saveGenerators(newList);
+        if (activeGenerator && activeGenerator.id === gen.id) {
           activeGenerator = null;
         }
         renderGeneratorNav();
@@ -884,10 +961,14 @@
       const nameInput   = document.getElementById("genNameInput");
       const itemsInput  = document.getElementById("genItemsInput");
       const saveBtn     = document.getElementById("saveGeneratorBtn");
+      const expandBtn   = document.getElementById("expandItemsBtn");
 
       folderInput.value = "General";
       nameInput.value = "";
       itemsInput.value = "";
+      itemsInput.classList.remove("items-expanded");
+      itemsExpanded = false;
+      expandBtn.textContent = "Expand list editor";
       msg.textContent = "";
       msg.classList.remove("danger");
       saveBtn.textContent = "Save generator";
@@ -896,7 +977,7 @@
     }
 
     function openEditGeneratorBox(genId) {
-      const gens = loadCustomGenerators();
+      const gens = loadGenerators();
       const gen = gens.find(g => g.id === genId);
       if (!gen) return;
 
@@ -907,12 +988,16 @@
       const nameInput   = document.getElementById("genNameInput");
       const itemsInput  = document.getElementById("genItemsInput");
       const saveBtn     = document.getElementById("saveGeneratorBtn");
+      const expandBtn   = document.getElementById("expandItemsBtn");
 
       folderInput.value = gen.folder || "General";
       nameInput.value   = gen.name || "";
-      itemsInput.value  = gen.items.join("\n");
+      itemsInput.value  = Array.isArray(gen.items) ? gen.items.join("\n") : "";
+      itemsInput.classList.remove("items-expanded");
+      itemsExpanded = false;
+      expandBtn.textContent = "Expand list editor";
 
-      msg.textContent = `Editing generator “${gen.name}”.`;
+      msg.textContent = `Editing “${gen.name}”. Items edit only, generator type stays the same.`;
       msg.classList.remove("danger");
       saveBtn.textContent = "Save changes";
 
@@ -927,6 +1012,11 @@
       msg.textContent = "";
       msg.classList.remove("danger");
       editingGeneratorId = null;
+      const itemsInput  = document.getElementById("genItemsInput");
+      const expandBtn   = document.getElementById("expandItemsBtn");
+      itemsInput.classList.remove("items-expanded");
+      itemsExpanded = false;
+      expandBtn.textContent = "Expand list editor";
       box.style.display = "none";
     }
 
@@ -953,27 +1043,28 @@
         return;
       }
 
-      const gens = loadCustomGenerators();
+      const gens = loadGenerators();
       if (editingGeneratorId) {
-        // update existing
         const idx = gens.findIndex(g => g.id === editingGeneratorId);
         if (idx !== -1) {
+          const existingType = gens[idx].type || "list";
           gens[idx].folder = folder;
           gens[idx].name   = name;
           gens[idx].items  = items;
+          gens[idx].type   = existingType; // keep elf/book/list as-is
         }
-        saveCustomGenerators(gens);
+        saveGenerators(gens);
         msg.classList.remove("danger");
-        msg.textContent = `Updated generator “${name}” with ${items.length} items. ${duplicates > 0 ? duplicates + " duplicates removed." : "No duplicates detected."}`;
-        activeGenerator = { kind: "custom", id: editingGeneratorId };
+        msg.textContent = `Updated “${name}” with ${items.length} items. ${duplicates > 0 ? duplicates + " duplicates removed." : "No duplicates detected."}`;
+        activeGenerator = { id: editingGeneratorId };
         editingGeneratorId = null;
       } else {
         const id = "gen-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
-        gens.push({ id, folder, name, items });
-        saveCustomGenerators(gens);
+        gens.push({ id, folder, name, type: "list", items });
+        saveGenerators(gens);
         msg.classList.remove("danger");
-        msg.textContent = `Saved generator “${name}” in folder “${folder}” with ${items.length} items. ${duplicates > 0 ? duplicates + " duplicates removed." : "No duplicates detected."}`;
-        activeGenerator = { kind: "custom", id };
+        msg.textContent = `Saved “${name}” in folder “${folder}” with ${items.length} items. ${duplicates > 0 ? duplicates + " duplicates removed." : "No duplicates detected."}`;
+        activeGenerator = { id };
       }
 
       renderGeneratorNav();
@@ -984,18 +1075,29 @@
       }, 1200);
     }
 
+    function toggleItemsExpand() {
+      const ta = document.getElementById("genItemsInput");
+      const btn = document.getElementById("expandItemsBtn");
+      itemsExpanded = !itemsExpanded;
+      if (itemsExpanded) {
+        ta.classList.add("items-expanded");
+        btn.textContent = "Collapse list editor";
+      } else {
+        ta.classList.remove("items-expanded");
+        btn.textContent = "Expand list editor";
+      }
+    }
+
     // --------------------------------
     // NAV CLICK HANDLER
     // --------------------------------
     function handleNavClick(event) {
       const target = event.target.closest(".nav-generator");
       if (!target) return;
+      const id = target.dataset.id;
+      if (!id) return;
 
-      const kind = target.dataset.kind;
-      const id   = target.dataset.id;
-      if (!kind || !id) return;
-
-      activeGenerator = { kind, id };
+      activeGenerator = { id };
       renderGeneratorNav();
       renderActiveGeneratorPanel();
     }
@@ -1004,17 +1106,14 @@
     // INIT
     // --------------------------------
     document.addEventListener("DOMContentLoaded", () => {
-      // Initial render
       renderGeneratorNav();
       renderActiveGeneratorPanel();
 
-      // Nav click
       document.getElementById("generatorNav").addEventListener("click", handleNavClick);
-
-      // Create / edit
       document.getElementById("addGeneratorBtn").addEventListener("click", openNewGeneratorBox);
       document.getElementById("cancelGeneratorBtn").addEventListener("click", hideGeneratorCreateBox);
       document.getElementById("saveGeneratorBtn").addEventListener("click", handleSaveGenerator);
+      document.getElementById("expandItemsBtn").addEventListener("click", toggleItemsExpand);
     });
   </script>
 </body>
