@@ -643,12 +643,10 @@
     }
 
     .toolbox-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-      margin-top: 4px;
-      flex: 1;
-      min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 4px;
     }
 
     .toolbox-col {
@@ -658,10 +656,10 @@
     }
 
     .toolbox-col textarea {
-      min-height: 60px;
-      max-height: 140px;
-      flex: 1;
-      font-size: 0.78rem;
+  min-height: 80px;     /* or 60px if you prefer smaller */
+  max-height: 200px;
+  /* remove flex:1 so it doesn't force the row taller */
+  font-size: 0.78rem;
     }
 
     .danger {
@@ -3018,6 +3016,7 @@
   </script>
 </body>
 </html>
+
 
 
 
