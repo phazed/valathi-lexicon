@@ -269,7 +269,7 @@ function loadFolderState() {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
+  } catch (err) {
     return {};
   }
 }
@@ -277,8 +277,11 @@ function loadFolderState() {
 function saveFolderState() {
   try {
     window.localStorage.setItem(FOLDER_STATE_KEY, JSON.stringify(folderState));
-  } catch {}
+  } catch (err) {
+    // ignore storage errors
+  }
 }
+
 
 function seedInitialGenerators() {
   const elfStartId = "seed-elf-starts";
@@ -433,8 +436,8 @@ function loadGenerators() {
         if (!items.advancedMode) items.advancedMode = "simple";
       }
       return { ...g, type, items };
-    });
-  } catch {
+        });
+  } catch (err) {
     return [];
   }
 }
@@ -442,8 +445,11 @@ function loadGenerators() {
 function saveGenerators(list) {
   try {
     window.localStorage.setItem(GEN_STORAGE_KEY, JSON.stringify(list));
-  } catch {}
+  } catch (err) {
+    // ignore storage errors
+  }
 }
+
 
 function populateFolderSelect(selectedFolder) {
   const select = document.getElementById("genFolderSelect");
@@ -1365,11 +1371,10 @@ function openLexManageBox(genId) {
               imported.push({ english, valathi });
             }
           }
+        } catch (err) {
+        console.error("Error parsing imported lexicon:", err);
         }
-      } catch {
-        const { items } = parseLexiconText(text);
-        imported = imported.concat(items);
-      }
+
 
       if (!imported.length) {
         msg.textContent = "No valid entries found in file.";
