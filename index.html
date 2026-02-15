@@ -171,10 +171,25 @@
       border-radius: var(--radius-lg);
       border: 1px solid var(--border-subtle);
       box-shadow: var(--shadow-soft);
-      padding: 10px 8px;
+      padding: 8px 6px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+      min-height: 0;
+    }
+
+    .sidebar-section {
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: #050608;
+      padding: 6px 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #sidebarGeneratorsSection {
+      flex: 1;
       min-height: 0;
     }
 
@@ -189,6 +204,7 @@
       display: flex;
       gap: 6px;
       align-items: center;
+      justify-content: space-between;
     }
 
     .sidebar-title {
@@ -226,9 +242,11 @@
       padding: 0 2px;
     }
 
-    .sidebar-bottom-tools {
-      margin-top: 6px;
-      padding: 0 4px;
+    .tools-nav {
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 4px;
+      padding: 0 2px;
     }
 
     .nav-folder-heading {
@@ -302,6 +320,30 @@
       text-overflow: ellipsis;
       overflow: hidden;
       max-width: 100%;
+    }
+
+    .nav-tool {
+      font-size: 0.78rem;
+      padding: 4px 8px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      margin-top: 2px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    .nav-tool:hover {
+      background: #151a22;
+      color: var(--accent-strong);
+    }
+
+    .nav-tool.active {
+      background: linear-gradient(135deg, #1f2835, #101720);
+      color: var(--accent-strong);
+      border: 1px solid #6d7584;
     }
 
     section.main-panel {
@@ -554,7 +596,6 @@
       font-size: 0.75rem;
     }
 
-    /* Advanced token search + chips */
     .adv-token-advanced {
       display: flex;
       flex-direction: column;
@@ -615,13 +656,13 @@
       color: var(--accent-strong);
     }
 
-    /* Toolbox (text cleaner) in sidebar */
     .toolbox {
       border-radius: var(--radius-md);
       border: 1px solid #232a33;
       background: #05070c;
       padding: 6px 8px;
       font-size: 0.78rem;
+      margin-top: 4px;
     }
 
     .toolbox-header {
@@ -751,60 +792,74 @@
     <div class="layout-main">
       <!-- LEFT: Generators / Folders + Tools -->
       <aside class="sidebar">
-        <div class="sidebar-header">
-          <div class="sidebar-header-row">
-            <div>
-              <div class="sidebar-title">Generators & Lexicons</div>
-              <div class="sidebar-subtitle">Click a generator to use it · folders for organization</div>
-            </div>
-            <button id="addGeneratorBtn" class="btn-primary btn-small" type="button">
-              ＋ New
-            </button>
-          </div>
-          <input
-            id="generatorSearchInput"
-            class="search-input"
-            type="text"
-            placeholder="Search generators..."
-          />
-        </div>
-
-        <div id="generatorNav" class="nav-scroll"></div>
-
-        <!-- Tools section (Text Cleaner, etc.) -->
-        <div class="sidebar-bottom-tools">
-          <div class="sidebar-title">Tools</div>
-          <div class="toolbox">
-            <div class="toolbox-header">
-              <div class="toolbox-title">
-                Text Cleaner • list formatting helper
+        <!-- Generators & Lexicons -->
+        <div id="sidebarGeneratorsSection" class="sidebar-section">
+          <div class="sidebar-header">
+            <div class="sidebar-header-row">
+              <div>
+                <div class="sidebar-title">Generators & Lexicons</div>
+                <div class="sidebar-subtitle">Click a generator to use it · folders for organization</div>
               </div>
-              <button id="toggleTextCleanerBtn" class="btn-secondary btn-small" type="button">
-                Hide
+              <button id="addGeneratorBtn" class="btn-primary btn-small" type="button">
+                ＋ New
               </button>
             </div>
-            <div id="textCleanerBody" class="toolbox-body">
-              <div class="muted">
-                Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) below,
-                click <b>Clean text</b>, then copy the cleaned list for your generators.
-              </div>
-              <div class="toolbox-row">
-                <div class="toolbox-col">
-                  <label for="cleanInput">Raw text</label>
-                  <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
+            <input
+              id="generatorSearchInput"
+              class="search-input"
+              type="text"
+              placeholder="Search generators..."
+            />
+          </div>
+          <div id="generatorNav" class="nav-scroll"></div>
+        </div>
+
+        <!-- Tools box -->
+        <div id="sidebarToolsSection" class="sidebar-section">
+          <div class="sidebar-header">
+            <div>
+              <div class="sidebar-title">Tools</div>
+              <div class="sidebar-subtitle">Format helpers & utilities</div>
+            </div>
+          </div>
+          <input
+            id="toolSearchInput"
+            class="search-input"
+            type="text"
+            placeholder="Search tools..."
+          />
+          <div id="toolsNav" class="tools-nav"></div>
+          <div id="toolPanels">
+            <!-- Text Cleaner tool panel -->
+            <div class="toolbox" data-tool-id="textCleaner">
+              <div class="toolbox-header">
+                <div class="toolbox-title">
+                  Text Cleaner • list formatting helper
                 </div>
-                <div class="toolbox-col">
-                  <label for="cleanOutput">Cleaned · one item per line</label>
-                  <textarea id="cleanOutput" readonly></textarea>
-                </div>
               </div>
-              <div class="row" style="margin-top:4px;">
-                <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
-                  Clean text
-                </button>
-                <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
-                  Copy cleaned text
-                </button>
+              <div class="toolbox-body">
+                <div class="muted">
+                  Paste messy, numbered or multi-column text (e.g. <code>4 Arrogant 54 Logical</code>) below,
+                  click <b>Clean text</b>, then copy the cleaned list for your generators.
+                </div>
+                <div class="toolbox-row">
+                  <div class="toolbox-col">
+                    <label for="cleanInput">Raw text</label>
+                    <textarea id="cleanInput" placeholder="4 Arrogant 54 Logical&#10;5 Blunt 55 Love-struck&#10;..."></textarea>
+                  </div>
+                  <div class="toolbox-col">
+                    <label for="cleanOutput">Cleaned · one item per line</label>
+                    <textarea id="cleanOutput" readonly></textarea>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:4px;">
+                  <button id="cleanRunBtn" class="btn-primary btn-small" type="button">
+                    Clean text
+                  </button>
+                  <button id="cleanCopyBtn" class="btn-secondary btn-small" type="button">
+                    Copy cleaned text
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -886,9 +941,34 @@
     </div>
   </div>
 
+  <!-- Lexicon manage modal -->
+  <div id="lexManageBox" class="generator-create-box">
+    <div class="generator-create-inner">
+      <div class="generator-create-header">
+        <div id="lexManageTitle" class="generator-create-title">Manage Lexicon</div>
+        <button id="lexManageCloseBtn" class="btn-secondary btn-small" type="button">
+          ✕ Close
+        </button>
+      </div>
+      <div id="lexManageMessage" class="muted"></div>
+      <div id="lexManageBody" class="generator-create-body"></div>
+    </div>
+  </div>
+
   <script>
     const GEN_STORAGE_KEY = "vrahuneGeneratorsV4";
     const FOLDER_STATE_KEY = "vrahuneFolderStateV1";
+
+    // Simple tool registry for the Tools box
+    const toolsConfig = [
+      {
+        id: "textCleaner",
+        name: "Text Cleaner",
+        description: "Clean numbered / multi-column lists into one-entry-per-line."
+      }
+    ];
+    let activeToolId = "textCleaner";
+    let toolSearchTerm = "";
 
     let activeGenerator = null;
     let editingGeneratorId = null;
@@ -1372,6 +1452,48 @@
       }
     }
 
+    function renderToolsNav() {
+      const nav = document.getElementById("toolsNav");
+      if (!nav) return;
+
+      const q = (toolSearchTerm || "").trim().toLowerCase();
+      const filtered = toolsConfig.filter(t =>
+        t.name.toLowerCase().includes(q)
+      );
+
+      nav.innerHTML = "";
+
+      if (!filtered.length) {
+        nav.innerHTML = `<div class="muted" style="font-size:0.78rem; padding:2px 4px 4px;">No tools match “${toolSearchTerm}”.</div>`;
+      } else {
+        filtered.forEach(tool => {
+          const div = document.createElement("div");
+          div.className = "nav-tool";
+          div.dataset.id = tool.id;
+          if (tool.id === activeToolId) div.classList.add("active");
+          div.innerHTML = `<span class="name">${tool.name}</span>`;
+          nav.appendChild(div);
+        });
+      }
+
+      updateToolPanelsVisibility();
+    }
+
+    function updateToolPanelsVisibility() {
+      const panels = document.querySelectorAll("#toolPanels .toolbox");
+      const visibleIds = Array.from(document.querySelectorAll("#toolsNav .nav-tool"))
+        .map(el => el.dataset.id);
+
+      panels.forEach(p => {
+        const id = p.dataset.toolId;
+        if (visibleIds.includes(id) && id === activeToolId) {
+          p.style.display = "block";
+        } else {
+          p.style.display = "none";
+        }
+      });
+    }
+
     function renderActiveGeneratorPanel() {
       const label = document.getElementById("activeGeneratorLabel");
       const panel = document.getElementById("generatorPanel");
@@ -1412,11 +1534,11 @@
               <button id="customGenerateBtn" class="btn-primary">Generate</button>
             </div>
           </div>
-          <div class="row">
-            <button id="customEditBtn" class="btn-secondary btn-small">Edit items</button>
+          <div id="customResults" class="generated-list"></div>
+          <div class="row" style="margin-top:6px;">
+            <button id="customEditBtn" class="btn-secondary btn-small">Edit generator</button>
             <button id="customDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
           </div>
-          <div id="customResults" class="generated-list"></div>
         `;
 
         const countInput = panel.querySelector("#customCountInput");
@@ -1493,62 +1615,16 @@
 
           <div id="lexResult" class="generated-list"></div>
 
-          <hr>
-
-          <div class="section-title">
-            <span>Manage entries</span>
+          <div class="row" style="margin-top:6px;">
+            <button id="lexManageOpenBtn" class="btn-secondary btn-small">Manage lexicon</button>
           </div>
-          <div class="row">
-            <div class="col">
-              <label for="lexiconAddInput">Add entries (english = valathi)</label>
-              <textarea id="lexiconAddInput" placeholder="high = val&#10;forest = ’ath"></textarea>
-            </div>
-          </div>
-          <div class="row">
-            <button id="lexAppendBtn" class="btn-secondary btn-small">Append from text</button>
-            <button id="lexImportBtn" class="btn-secondary btn-small">Import from JSON/HTML</button>
-            <button id="lexDownloadBtn" class="btn-secondary btn-small">Download JSON</button>
-            <button id="lexOpenEditBtn" class="btn-secondary btn-small">Edit as raw</button>
-            <button id="lexDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
-          </div>
-          <input type="file" id="lexFileInput" accept=".json,.txt,.html" style="display:none;">
-          <div id="lexMessage" class="muted" style="margin-top:4px;"></div>
-
-          <div class="section-title" style="margin-top:10px;">
-            <span>All entries</span>
-            <span class="muted" style="font-size:0.75rem;">Click to copy "english = valathi"</span>
-          </div>
-          <div id="lexAllEntries" class="generated-list"></div>
         `;
 
         const lexMode = panel.querySelector("#lexMode");
         const lexQuery = panel.querySelector("#lexQuery");
         const lexSearchBtn = panel.querySelector("#lexSearchBtn");
         const lexResult = panel.querySelector("#lexResult");
-        const lexAllEntries = panel.querySelector("#lexAllEntries");
-        const lexAddInput = panel.querySelector("#lexiconAddInput");
-        const lexAppendBtn = panel.querySelector("#lexAppendBtn");
-        const lexImportBtn = panel.querySelector("#lexImportBtn");
-        const lexDownloadBtn = panel.querySelector("#lexDownloadBtn");
-        const lexFileInput = panel.querySelector("#lexFileInput");
-        const lexMessage = panel.querySelector("#lexMessage");
-        const lexOpenEditBtn = panel.querySelector("#lexOpenEditBtn");
-        const lexDeleteBtn = panel.querySelector("#lexDeleteBtn");
-
-        function renderAllEntriesList(items) {
-          lexAllEntries.innerHTML = "";
-          const sorted = [...items].sort((a, b) =>
-            String(a.english).localeCompare(String(b.english))
-          );
-          const frag = document.createDocumentFragment();
-          for (const e of sorted) {
-            const div = document.createElement("div");
-            div.className = "generated-item";
-            div.textContent = `${e.english} = ${e.valathi}`;
-            frag.appendChild(div);
-          }
-          lexAllEntries.appendChild(frag);
-        }
+        const lexManageOpenBtn = panel.querySelector("#lexManageOpenBtn");
 
         function searchLexicon(items, query, mode) {
           const q = query.trim().toLowerCase();
@@ -1604,133 +1680,11 @@
         });
 
         lexResult.addEventListener("click", handleCopyClick);
-        lexAllEntries.addEventListener("click", handleCopyClick);
 
-        lexAppendBtn.addEventListener("click", () => {
-          const raw = lexAddInput.value || "";
-          if (!raw.trim()) {
-            lexMessage.textContent = "No text to append.";
-            return;
-          }
-          const { items: newItems, duplicates } = parseLexiconText(raw);
-          if (!newItems.length) {
-            lexMessage.textContent = "No valid entries found. Use 'english = valathi'.";
-            return;
-          }
-          const gensCurrent = loadGenerators();
-          const idx = gensCurrent.findIndex(x => x.id === gen.id);
-          if (idx === -1) return;
-          const before = Array.isArray(gensCurrent[idx].items) ? gensCurrent[idx].items : [];
-          const merged = mergeLexiconEntries(before, newItems);
-          const added = merged.length - before.length;
-
-          gensCurrent[idx].items = merged;
-          saveGenerators(gensCurrent);
-          lexAddInput.value = "";
-
-          lexMessage.textContent =
-            `Appended ${added} entries. ${duplicates > 0 ? duplicates + " duplicate lines removed." : "No duplicates in input."}`;
-          renderAllEntriesList(merged);
+        lexManageOpenBtn.addEventListener("click", () => {
+          openLexManageBox(gen.id);
         });
 
-        lexImportBtn.addEventListener("click", () => {
-          lexFileInput.value = "";
-          lexFileInput.click();
-        });
-
-        lexFileInput.addEventListener("change", (e) => {
-          const file = e.target.files && e.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            const text = ev.target.result;
-            let imported = [];
-
-            try {
-              const parsed = JSON.parse(text);
-              if (Array.isArray(parsed)) {
-                for (const item of parsed) {
-                  if (!item) continue;
-                  if (typeof item === "string") {
-                    const { items } = parseLexiconText(item);
-                    imported = imported.concat(items);
-                  } else if (typeof item === "object") {
-                    const english = item.english || item.en || item.word || item.key || "";
-                    const valathi = item.valathi || item.va || item.value || "";
-                    if (english && valathi) {
-                      imported.push({ english, valathi });
-                    }
-                  }
-                }
-              } else if (typeof parsed === "object") {
-                for (const key in parsed) {
-                  if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
-                  const english = key;
-                  const valathi = parsed[key];
-                  if (english && valathi) {
-                    imported.push({ english, valathi });
-                  }
-                }
-              }
-            } catch {
-              const { items } = parseLexiconText(text);
-              imported = imported.concat(items);
-            }
-
-            if (!imported.length) {
-              lexMessage.textContent = "No valid entries found in file.";
-              return;
-            }
-
-            const gensCurrent = loadGenerators();
-            const idx = gensCurrent.findIndex(x => x.id === gen.id);
-            if (idx === -1) return;
-
-            const before = Array.isArray(gensCurrent[idx].items) ? gensCurrent[idx].items : [];
-            const merged = mergeLexiconEntries(before, imported);
-            const added = merged.length - before.length;
-
-            gensCurrent[idx].items = merged;
-            saveGenerators(gensCurrent);
-            lexMessage.textContent = `Imported ${added} new entries from file.`;
-            renderAllEntriesList(merged);
-          };
-          reader.readAsText(file);
-        });
-
-        lexDownloadBtn.addEventListener("click", () => {
-          const gensCurrent = loadGenerators();
-          const g = gensCurrent.find(x => x.id === gen.id);
-          if (!g) return;
-          const dataStr = JSON.stringify(g.items || [], null, 2);
-          const blob = new Blob([dataStr], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${g.name.replace(/\s+/g, "_")}.json`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        });
-
-        lexOpenEditBtn.addEventListener("click", () => {
-          openEditGeneratorBox(gen.id);
-        });
-
-        lexDeleteBtn.addEventListener("click", () => {
-          const ok = window.confirm(`Delete generator “${gen.name}” from folder “${gen.folder || "General"}”?`);
-          if (!ok) return;
-          const newList = gens.filter(g => g.id !== gen.id);
-          saveGenerators(newList);
-          if (activeGenerator && activeGenerator.id === gen.id) {
-            activeGenerator = null;
-          }
-          renderGeneratorNav();
-          renderActiveGeneratorPanel();
-        });
-
-        renderAllEntriesList(gen.items || []);
         return;
       }
 
@@ -1761,13 +1715,13 @@
               <label>&nbsp;</label>
               <button id="advGenerateBtn" class="btn-primary">Generate</button>
             </div>
-            <div class="col">
-              <label>&nbsp;</label>
-              <button id="advEditMetaBtn" class="btn-secondary btn-small">Edit name & folder</button>
-            </div>
           </div>
 
           <div id="advResults" class="generated-list"></div>
+
+          <div class="row" style="margin-top:6px;">
+            <button id="advMetaEditBtn" class="btn-secondary btn-small">Edit generator</button>
+          </div>
 
           <hr>
 
@@ -1830,7 +1784,7 @@
         const advSaveBtn = panel.querySelector("#advSaveBtn");
         const advDeleteBtn = panel.querySelector("#advDeleteBtn");
         const advTabs = panel.querySelectorAll(".adv-tab");
-        const advEditMetaBtn = panel.querySelector("#advEditMetaBtn");
+        const advMetaEditBtn = panel.querySelector("#advMetaEditBtn");
 
         let advMode = savedMode;
 
@@ -1970,7 +1924,6 @@
           advTokensAdvancedContainer.innerHTML = "";
           advTokensAdvancedContainer.appendChild(table);
 
-          // Initialize chips from existing map
           tokens.forEach(token => {
             const wrapper = advTokensAdvancedContainer.querySelector(`.adv-token-advanced[data-token="${token}"]`);
             if (!wrapper) return;
@@ -2192,8 +2145,8 @@
           advResults.addEventListener("click", handleCopyClick);
         });
 
-        if (advEditMetaBtn) {
-          advEditMetaBtn.addEventListener("click", () => {
+        if (advMetaEditBtn) {
+          advMetaEditBtn.addEventListener("click", () => {
             openEditGeneratorBox(gen.id);
           });
         }
@@ -2305,6 +2258,216 @@
       newFolderInput.style.display = "none";
 
       box.style.display = "none";
+    }
+
+    function openLexManageBox(genId) {
+      const gens = loadGenerators();
+      const gen = gens.find(g => g.id === genId);
+      if (!gen || gen.type !== "lexicon") return;
+
+      const box = document.getElementById("lexManageBox");
+      const title = document.getElementById("lexManageTitle");
+      const msg = document.getElementById("lexManageMessage");
+      const body = document.getElementById("lexManageBody");
+      if (!box || !title || !msg || !body) return;
+
+      title.textContent = `Manage Lexicon – ${gen.name}`;
+      msg.textContent = `Folder: ${gen.folder || "General"} · ${gen.items.length} entries.`;
+      msg.classList.remove("danger");
+
+      body.innerHTML = `
+        <div class="row">
+          <div class="col">
+            <label for="lexManageAddInput">Add entries (english = valathi)</label>
+            <textarea id="lexManageAddInput" placeholder="high = val&#10;forest = ’ath"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <button id="lexManageAppendBtn" class="btn-secondary btn-small">Append from text</button>
+          <button id="lexManageImportBtn" class="btn-secondary btn-small">Import from JSON/HTML</button>
+          <button id="lexManageDownloadBtn" class="btn-secondary btn-small">Download JSON</button>
+          <button id="lexManageRawEditBtn" class="btn-secondary btn-small">Edit as raw</button>
+          <button id="lexManageDeleteBtn" class="btn-secondary btn-small">Delete generator</button>
+        </div>
+        <input type="file" id="lexManageFileInput" accept=".json,.txt,.html" style="display:none;">
+        <div class="section-title" style="margin-top:8px;">
+          <span>All entries</span>
+          <span class="muted" style="font-size:0.75rem;">Click to copy "english = valathi"</span>
+        </div>
+        <div id="lexManageEntries" class="generated-list"></div>
+      `;
+
+      function renderAllEntriesListLex(items) {
+        const listDiv = document.getElementById("lexManageEntries");
+        if (!listDiv) return;
+        listDiv.innerHTML = "";
+        const sorted = [...items].sort((a,b)=>String(a.english).localeCompare(String(b.english)));
+        const frag = document.createDocumentFragment();
+        sorted.forEach(e=>{
+          const div = document.createElement("div");
+          div.className = "generated-item";
+          div.textContent = `${e.english} = ${e.valathi}`;
+          frag.appendChild(div);
+        });
+        listDiv.appendChild(frag);
+        listDiv.addEventListener("click", handleCopyClick);
+      }
+
+      renderAllEntriesListLex(gen.items || []);
+
+      const addInput = body.querySelector("#lexManageAddInput");
+      const appendBtn = body.querySelector("#lexManageAppendBtn");
+      const importBtn = body.querySelector("#lexManageImportBtn");
+      const downloadBtn = body.querySelector("#lexManageDownloadBtn");
+      const rawEditBtn = body.querySelector("#lexManageRawEditBtn");
+      const deleteBtn = body.querySelector("#lexManageDeleteBtn");
+      const fileInput = body.querySelector("#lexManageFileInput");
+
+      appendBtn.addEventListener("click", () => {
+        const raw = addInput.value || "";
+        if (!raw.trim()) {
+          msg.textContent = "No text to append.";
+          msg.classList.add("danger");
+          return;
+        }
+        const { items: newItems, duplicates } = parseLexiconText(raw);
+        if (!newItems.length) {
+          msg.textContent = "No valid entries found. Use 'english = valathi'.";
+          msg.classList.add("danger");
+          return;
+        }
+        const gensCurrent = loadGenerators();
+        const idx = gensCurrent.findIndex(x => x.id === gen.id);
+        if (idx === -1) return;
+        const before = Array.isArray(gensCurrent[idx].items) ? gensCurrent[idx].items : [];
+        const merged = mergeLexiconEntries(before, newItems);
+        const added = merged.length - before.length;
+
+        gensCurrent[idx].items = merged;
+        saveGenerators(gensCurrent);
+        addInput.value = "";
+
+        msg.classList.remove("danger");
+        msg.textContent =
+          `Appended ${added} entries. ${duplicates > 0 ? duplicates + " duplicate lines removed." : "No duplicates in input."}`;
+        renderAllEntriesListLex(merged);
+        renderActiveGeneratorPanel();
+      });
+
+      importBtn.addEventListener("click", () => {
+        fileInput.value = "";
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const text = ev.target.result;
+          let imported = [];
+
+          try {
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                if (!item) continue;
+                if (typeof item === "string") {
+                  const { items } = parseLexiconText(item);
+                  imported = imported.concat(items);
+                } else if (typeof item === "object") {
+                  const english = item.english || item.en || item.word || item.key || "";
+                  const valathi = item.valathi || item.va || item.value || "";
+                  if (english && valathi) {
+                    imported.push({ english, valathi });
+                  }
+                }
+              }
+            } else if (typeof parsed === "object") {
+              for (const key in parsed) {
+                if (!Object.prototype.hasOwnProperty.call(parsed, key)) continue;
+                const english = key;
+                const valathi = parsed[key];
+                if (english && valathi) {
+                  imported.push({ english, valathi });
+                }
+              }
+            }
+          } catch {
+            const { items } = parseLexiconText(text);
+            imported = imported.concat(items);
+          }
+
+          if (!imported.length) {
+            msg.textContent = "No valid entries found in file.";
+            msg.classList.add("danger");
+            return;
+          }
+
+          const gensCurrent = loadGenerators();
+          const idx = gensCurrent.findIndex(x => x.id === gen.id);
+          if (idx === -1) return;
+
+          const before = Array.isArray(gensCurrent[idx].items) ? gensCurrent[idx].items : [];
+          const merged = mergeLexiconEntries(before, imported);
+          const added = merged.length - before.length;
+
+          gensCurrent[idx].items = merged;
+          saveGenerators(gensCurrent);
+          msg.classList.remove("danger");
+          msg.textContent = `Imported ${added} new entries from file.`;
+          renderAllEntriesListLex(merged);
+          renderActiveGeneratorPanel();
+        };
+        reader.readAsText(file);
+      });
+
+      downloadBtn.addEventListener("click", () => {
+        const gensCurrent = loadGenerators();
+        const g = gensCurrent.find(x => x.id === gen.id);
+        if (!g) return;
+        const dataStr = JSON.stringify(g.items || [], null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${g.name.replace(/\s+/g, "_")}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+
+      rawEditBtn.addEventListener("click", () => {
+        openEditGeneratorBox(gen.id);
+      });
+
+      deleteBtn.addEventListener("click", () => {
+        const ok = window.confirm(`Delete lexicon “${gen.name}” from folder “${gen.folder || "General"}”?`);
+        if (!ok) return;
+        const newList = gens.filter(gx => gx.id !== gen.id);
+        saveGenerators(newList);
+        if (activeGenerator && activeGenerator.id === gen.id) {
+          activeGenerator = null;
+        }
+        closeLexManageBox();
+        renderGeneratorNav();
+        renderActiveGeneratorPanel();
+      });
+
+      box.style.display = "flex";
+    }
+
+    function closeLexManageBox() {
+      const box = document.getElementById("lexManageBox");
+      const body = document.getElementById("lexManageBody");
+      const msg = document.getElementById("lexManageMessage");
+      if (body) body.innerHTML = "";
+      if (msg) {
+        msg.textContent = "";
+        msg.classList.remove("danger");
+      }
+      if (box) box.style.display = "none";
     }
 
     function handleSaveGenerator() {
@@ -2508,6 +2671,13 @@
       }
     }
 
+    function handleToolsNavClick(event) {
+      const item = event.target.closest(".nav-tool");
+      if (!item) return;
+      activeToolId = item.dataset.id;
+      renderToolsNav();
+    }
+
     async function initApp() {
       folderState = loadFolderState();
 
@@ -2520,9 +2690,11 @@
       renderGeneratorNav();
       renderActiveGeneratorPanel();
       populateFolderSelect("General");
+      renderToolsNav();
     }
 
     document.addEventListener("DOMContentLoaded", () => {
+      // Generator nav
       document.getElementById("generatorNav").addEventListener("click", handleNavClick);
       document.getElementById("addGeneratorBtn").addEventListener("click", openNewGeneratorBox);
       document.getElementById("cancelGeneratorBtn").addEventListener("click", hideGeneratorCreateBox);
@@ -2543,16 +2715,21 @@
         });
       }
 
-      const toggleCleanerBtn = document.getElementById("toggleTextCleanerBtn");
-      const cleanerBody = document.getElementById("textCleanerBody");
-      if (toggleCleanerBtn && cleanerBody) {
-        toggleCleanerBtn.addEventListener("click", () => {
-          const isHidden = cleanerBody.style.display === "none";
-          cleanerBody.style.display = isHidden ? "block" : "none";
-          toggleCleanerBtn.textContent = isHidden ? "Hide" : "Show";
+      // Tools nav
+      const toolSearchInput = document.getElementById("toolSearchInput");
+      if (toolSearchInput) {
+        toolSearchInput.addEventListener("input", (e) => {
+          toolSearchTerm = e.target.value || "";
+          renderToolsNav();
         });
       }
 
+      const toolsNavEl = document.getElementById("toolsNav");
+      if (toolsNavEl) {
+        toolsNavEl.addEventListener("click", handleToolsNavClick);
+      }
+
+      // Text cleaner events
       const cleanRunBtn = document.getElementById("cleanRunBtn");
       const cleanCopyBtn = document.getElementById("cleanCopyBtn");
       const cleanInput = document.getElementById("cleanInput");
@@ -2576,6 +2753,12 @@
             showCopyMessage("Cleaned text");
           }
         });
+      }
+
+      // Lexicon manage close
+      const lexManageCloseBtn = document.getElementById("lexManageCloseBtn");
+      if (lexManageCloseBtn) {
+        lexManageCloseBtn.addEventListener("click", closeLexManageBox);
       }
 
       initApp();
