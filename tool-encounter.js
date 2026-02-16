@@ -5193,8 +5193,21 @@ function renderEditorModal() {
   const monsterPickerSearch = shadow.getElementById("monsterPickerSearch");
   if (monsterPickerSearch) {
     monsterPickerSearch.addEventListener("input", () => {
+      const caretStart = monsterPickerSearch.selectionStart;
+      const caretEnd = monsterPickerSearch.selectionEnd;
       monsterPicker.query = monsterPickerSearch.value || "";
       render();
+
+      const freshSearch = shadow.getElementById("monsterPickerSearch");
+      if (freshSearch) {
+        try {
+          freshSearch.focus({ preventScroll: true });
+          const len = (freshSearch.value || "").length;
+          const start = Number.isFinite(caretStart) ? Math.min(caretStart, len) : len;
+          const end = Number.isFinite(caretEnd) ? Math.min(caretEnd, len) : start;
+          freshSearch.setSelectionRange(start, end);
+        } catch (_) {}
+      }
     });
   }
 
