@@ -656,6 +656,13 @@
     return !!linkedName;
   }
 
+  function getCombatantSourceLabel(c) {
+    const explicit = String(c?.source || "").trim();
+    if (explicit) return explicit;
+    if (isMonsterCombatant(c)) return isVaultImportedMonster(c) ? "Monster Vault" : "Manual";
+    return String(c?.type || "");
+  }
+
   function signedInt(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return "0";
@@ -2559,7 +2566,7 @@
                       </span>
                       <span class="card-tag">${esc(c.type)}</span>
                     </div>
-                    <div class="card-submeta">${esc(c.sizeType || "—")} · ${esc(c.source || (c.type === "Enemy" ? "Monster Vault" : c.type))}${hasMonsterDetails(c) ? ` · Details ${(c.actions?.length || 0) + (c.bonusActions?.length || 0) + (c.reactions?.length || 0) + (c.legendaryActions?.length || 0)}` : ""}</div>
+                    <div class="card-submeta">${esc(c.sizeType || "—")} · ${esc(getCombatantSourceLabel(c))}</div>
                   </div>
 
                   <div class="hp-block">
@@ -2710,7 +2717,7 @@ function renderLibraryTab() {
                           </span>
                           <span class="card-tag">${esc(c.type)}</span>
                         </div>
-                        <div class="card-submeta">${esc(c.sizeType || "—")} · ${esc(c.source || (c.type === "Enemy" ? "Monster Vault" : c.type))}${hasMonsterDetails(c) ? ` · Details ${(c.actions?.length || 0) + (c.bonusActions?.length || 0) + (c.reactions?.length || 0) + (c.legendaryActions?.length || 0)}` : ""}</div>
+                        <div class="card-submeta">${esc(c.sizeType || "—")} · ${esc(getCombatantSourceLabel(c))}</div>
                       </div>
                       <div class="hp-block">
                         <div class="hp-stat-slot">${renderMonsterStatHoverControl(c, "library", enc.id)}</div>
