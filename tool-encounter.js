@@ -217,26 +217,53 @@
     return !!monsterVaultApi();
   }
 
-  function monsterVaultMonsters() {
+  function monsterVaultMonsters(forceRefresh = false) {
     const api = monsterVaultApi();
     if (!api) return [];
-    try {
-      return (api.getAllMonsters() || []).map((m) => ({
-        id: String(m.id || ""),
-        name: String(m.name || "Unnamed Monster"),
-        type: ["PC", "NPC", "Enemy"].includes(m.type) ? m.type : "Enemy",
-        cr: normalizeCR(m.cr, "1/8"),
-        ac: Math.max(0, intOr(m.ac, 10)),
-        hp: Math.max(1, intOr(m.hp, 1)),
-        speed: Math.max(0, intOr(m.speed, 30)),
-        initiative: Math.max(0, intOr(m.initiative, 10)),
-        source: m.isHomebrew ? "Homebrew" : "SRD 2024",
-        sourceType: m.isHomebrew ? "homebrew" : "srd",
-        sizeType: String(m.sizeType || "")
-      }));
-    } catch (_) {
-      return [];
+
+    if (
+      !forceRefresh &&
+      Array.isArray(monsterPicker?.cachedList) &&
+      monsterPicker.cachedList.length
+    ) {
+      return monsterPicker.cachedList;
     }
+
+    let mons = [];
+    try {
+      if (typeof api.getMonsterIndex === "function") {
+        mons = api.getMonsterIndex();
+      } else if (typeof api.getAllMonsters === "function") {
+        mons = api.getAllMonsters();
+      }
+    } catch (_) {
+      mons = [];
+    }
+
+    const normalized = (Array.isArray(mons) ? mons : [])
+      .map((m) => ({
+        id: String(m?.id || "").trim(),
+        name: String(m?.name || "Unnamed Monster").trim() || "Unnamed Monster",
+        type: ["PC", "NPC", "Enemy"].includes(m?.type) ? m.type : "Enemy",
+        cr: normalizeCR(m?.cr, "0"),
+        ac: Math.max(0, intOr(m?.ac, 10)),
+        hp: Math.max(1, intOr(m?.hp, 1)),
+        speed: Math.max(0, intOr(m?.speed, 30)),
+        initiative: Math.max(0, intOr(m?.initiative, 10)),
+        source: String(m?.source || (m?.isHomebrew ? "Homebrew" : "SRD 2024")).trim() || "SRD 2024",
+        sourceType: m?.isHomebrew ? "homebrew" : "srd",
+        sizeType: String(m?.sizeType || ""),
+        level: normalizeLevel(m?.level, 3),
+        xp: Math.max(0, intOr(m?.xp, crToXP(m?.cr))),
+        isHomebrew: !!m?.isHomebrew
+      }))
+      .filter((m) => m.id);
+
+    if (monsterPicker) {
+      monsterPicker.cachedList = normalized;
+    }
+
+    return normalized;
   }
 
   function hasMonsterDetails(c) {
@@ -649,7 +676,8 @@
       encounterId: null,
       query: "",
       cr: "all",
-      source: "all"
+      source: "all",
+      cachedList: []
     };
 
     function openMonsterPicker(scope, encounterId = null) {
@@ -659,6 +687,7 @@
       monsterPicker.query = "";
       monsterPicker.cr = "all";
       monsterPicker.source = "all";
+      monsterPicker.cachedList = monsterVaultMonsters(true);
       render();
     }
 
@@ -683,7 +712,32 @@
       if (created.hpMax != null && created.hpCurrent == null) created.hpCurrent = created.hpMax;
       if (created.initiative == null) created.initiative = 10;
 
-      const next = mkCombatant(created);
+      const safeCreated = {
+        name: String(created.name || "Unnamed Monster").trim() || "Unnamed Monster",
+        type: ["PC", "NPC", "Enemy"].includes(created.type) ? created.type : "Enemy",
+        initiative: Math.max(0, intOr(created.initiative, 10)),
+        ac: Math.max(0, intOr(created.ac, 10)),
+        speed: Math.max(0, intOr(created.speed, 30)),
+        hpCurrent: Math.max(0, intOr(created.hpCurrent, intOr(created.hpMax, 1))),
+        hpMax: Math.max(1, intOr(created.hpMax, 1)),
+        level: normalizeLevel(created.level, 3),
+        cr: normalizeCR(created.cr, "0"),
+        sourceMonsterId: created.sourceMonsterId || monsterId,
+        sourceMonsterName: created.sourceMonsterName || created.name || "",
+        source: String(created.source || "").trim(),
+        xp: Math.max(0, intOr(created.xp, crToXP(created.cr))),
+        sizeType: String(created.sizeType || "").trim(),
+        details: safeJsonClone(created.details || {}),
+        traits: safeJsonClone(created.traits || []),
+        actions: safeJsonClone(created.actions || []),
+        bonusActions: safeJsonClone(created.bonusActions || []),
+        reactions: safeJsonClone(created.reactions || []),
+        legendaryActions: safeJsonClone(created.legendaryActions || []),
+        conditions: []
+      };
+      safeCreated.hpCurrent = clamp(safeCreated.hpCurrent, 0, safeCreated.hpMax);
+
+      const next = mkCombatant(safeCreated);
       if (monsterPicker.scope === "library") {
         const enc = state.library.find((e) => e.id === monsterPicker.encounterId);
         if (!enc) return;
@@ -2366,10 +2420,8 @@ function renderEditorModal() {
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(170px,1.65fr) minmax(290px,1.1fr) minmax(112px,0.85fr);
-          grid-template-areas:
-            "name hp meta"
-            "conds conds conds";
+          grid-template-columns: minmax(170px,1.4fr) minmax(290px,1.2fr) minmax(160px,0.95fr) minmax(112px,0.85fr);
+          grid-template-areas: "name hp conds meta";
           align-items: center;
           column-gap: 8px;
           row-gap: 3px;
@@ -2379,12 +2431,12 @@ function renderEditorModal() {
           min-width: 0;
           grid-area: name;
           display: flex;
-          justify-content: center;
+          justify-content: flex-start;
         }
         .name-row {
           display: flex;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-start;
           gap: 6px;
           min-width: 0;
           width: 100%;
@@ -2401,7 +2453,7 @@ function renderEditorModal() {
           text-overflow: ellipsis;
           display: inline-block;
           max-width: 100%;
-          text-align: center;
+          text-align: left;
         }
 
         .inline-edit {
@@ -2451,9 +2503,9 @@ function renderEditorModal() {
         }
 
         .inline-edit-name {
-          flex: 0 1 auto;
+          flex: 1 1 auto;
           min-width: 0;
-          max-width: calc(100% - 58px);
+          max-width: 100%;
         }
 
         .inline-input-name {
@@ -2485,6 +2537,7 @@ function renderEditorModal() {
           background: #0a0f15;
           white-space: nowrap;
           flex-shrink: 0;
+          margin-left: 2px;
         }
 
         .pc-card .card-tag { border-color: #3b5678; color: #b8c8ff; background: #0b1420; }
@@ -2923,26 +2976,32 @@ function renderEditorModal() {
         .condition-row {
           grid-area: conds;
           margin-top: 0;
-          display: flex;
-          flex-wrap: wrap;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           align-items: center;
-          justify-content: center;
           gap: 4px;
           min-height: 0;
+          width: 100%;
+          max-width: 190px;
+          max-height: 86px;
+          overflow: auto;
+          padding-right: 2px;
         }
 
         .condition-chip {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          justify-content: center;
+          gap: 5px;
           border-radius: 999px;
           border: 1px solid #2f3845;
           background: #0a1018;
           color: #d6e2f8;
-          font-size: 0.68rem;
+          font-size: 0.73rem;
           line-height: 1;
-          padding: 3px 7px;
+          padding: 4px 9px;
           white-space: nowrap;
+          width: 100%;
         }
 
         .condition-chip.exhaustion {
@@ -3130,15 +3189,19 @@ function renderEditorModal() {
             grid-template-areas:
               "name"
               "hp"
-              "meta"
-              "conds";
+              "conds"
+              "meta";
             row-gap: 4px;
           }
           .name-block,
           .name-row { justify-content: center; }
           .card-meta { justify-self: center; align-items: center; }
-          .hp-block { justify-self: center; }
-          .condition-row { justify-content: center; }
+          .hp-block,
+          .condition-row { justify-self: center; }
+          .condition-row {
+            max-width: 100%;
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
+          }
           .monster-picker-filters { grid-template-columns: 1fr; }
         }
 
@@ -4215,6 +4278,7 @@ function bindEditorEvents() {
 
   registerEncounterTool();
   injectPanelOverrideCss();
+
 
   if (typeof window.renderToolsNav === "function") {
     window.renderToolsNav();
