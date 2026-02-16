@@ -1,4 +1,4 @@
-// encounter-fix-r3
+// encounter-fix-r4
 // tool-encounter.js
 // Encounter / Initiative tool for Vrahune Toolbox
 (function () {
@@ -207,6 +207,25 @@
     return /^data:image\//i.test(s) ? s : "";
   }
 
+
+  function isMonsterVaultLike(candidate) {
+    if (!candidate || typeof candidate !== "object") return false;
+    if (
+      typeof candidate.getMonsterIndex === "function" ||
+      typeof candidate.getAllMonsters === "function" ||
+      typeof candidate.searchMonsters === "function" ||
+      typeof candidate.getMonsterById === "function" ||
+      Array.isArray(candidate.monsters) ||
+      Array.isArray(candidate.items) ||
+      Array.isArray(candidate.results) ||
+      Array.isArray(candidate.data) ||
+      Array.isArray(candidate.list)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   function monsterVaultApi() {
     const candidates = [
       window.VrahuneMonsterVault,
@@ -214,7 +233,7 @@
       window.vrahuneMonsterVault
     ];
     for (const candidate of candidates) {
-      if (candidate && typeof candidate === "object") return candidate;
+      if (isMonsterVaultLike(candidate)) return candidate;
     }
     return null;
   }
@@ -227,15 +246,91 @@
       payload.items,
       payload.data,
       payload.results,
-      payload.list
+      payload.list,
+      payload.index,
+      payload.rows,
+      payload.values
     ];
     for (const bucket of buckets) {
       if (Array.isArray(bucket)) return bucket;
     }
+    if (payload.monstersById && typeof payload.monstersById === "object") {
+      const vals = Object.values(payload.monstersById).filter((x) => x && typeof x === "object");
+      if (vals.length) return vals;
+    }
     return [];
   }
 
+  function isThenable(value) {
+    return !!value && (typeof value === "object" || typeof value === "function") && typeof value.then === "function";
+  }
+
+  let vaultAsyncRequestSeq = 0;
+  function tryResolveAsyncVaultPayload(value, reason = "") {
+    if (!isThenable(value)) return;
+    const seq = ++vaultAsyncRequestSeq;
+    Promise.resolve(value)
+      .then((resolved) => {
+        if (seq !== vaultAsyncRequestSeq) return;
+        const arr = pickArrayish(resolved);
+        if (!arr.length) return;
+
+        const list = arr
+          .map((m) => {
+            const sourceType = m?.sourceType
+              ? String(m.sourceType).toLowerCase()
+              : (m?.isHomebrew || /homebrew/i.test(String(m?.source || "")) ? "homebrew" : "srd");
+            const source = sourceType === "homebrew" ? "Homebrew" : String(m?.source || "SRD 2024");
+            const details = m?.details && typeof m.details === "object" ? m.details : null;
+            const actionsCount =
+              Math.max(0, intOr(m?.actionsCount, 0)) ||
+              ((details?.actions?.length || 0) +
+                (details?.bonusActions?.length || 0) +
+                (details?.reactions?.length || 0) +
+                (details?.legendaryActions?.length || 0));
+
+            return {
+              id: String(m?.id || ""),
+              name: String(m?.name || "Unnamed Monster"),
+              type: ["PC", "NPC", "Enemy"].includes(m?.type) ? m.type : "Enemy",
+              cr: normalizeCR(m?.cr, "1/8"),
+              ac: Math.max(0, intOr(m?.ac, 10)),
+              hp: Math.max(1, intOr(m?.hp ?? m?.hpMax ?? m?.hpCurrent, 1)),
+              speed: Math.max(0, intOr(m?.speed, 30)),
+              initiative: Math.max(0, intOr(m?.initiative, 10)),
+              source,
+              sourceType,
+              sizeType: String(m?.sizeType || ""),
+              actionsCount
+            };
+          })
+          .filter((m) => m.id && m.name);
+
+        if (!list.length) return;
+
+        monsterVaultIndexCache.list = list;
+        monsterVaultIndexCache.crValues = [...new Set(list.map((m) => m.cr).filter(Boolean))].sort((a, b) => crToFloat(a) - crToFloat(b));
+        monsterVaultIndexCache.ready = true;
+        if (monsterPicker.open) render();
+      })
+      .catch(() => {});
+  }
+
   function getVaultRawList(api) {
+    // If an API object already carries arrays, use those first.
+    const directFromApi = pickArrayish(api);
+    if (directFromApi.length) return directFromApi;
+
+    // Global snapshots published by tool-monster-vault.js (cross-version safety net).
+    const globalSnapshots = [
+      window.__vrahuneMonsterVaultIndex,
+      window.__vrahuneMonsterVaultMonsters
+    ];
+    for (const snapshot of globalSnapshots) {
+      const arr = pickArrayish(snapshot);
+      if (arr.length) return arr;
+    }
+
     if (!api || typeof api !== "object") return [];
     const attempts = [
       () => (typeof api.getMonsterIndex === "function" ? api.getMonsterIndex() : null),
@@ -246,14 +341,20 @@
     for (const fn of attempts) {
       try {
         const value = fn();
+        if (isThenable(value)) {
+          tryResolveAsyncVaultPayload(value, "method");
+          continue;
+        }
         const arr = pickArrayish(value);
         if (arr.length) return arr;
       } catch (_) {}
     }
+
     return [];
   }
 
   function toEncounterFromRawMonster(rawMonster, fallbackId = null) {
+
     const src = rawMonster && typeof rawMonster === "object" ? rawMonster : {};
     const details = src.details && typeof src.details === "object" ? JSON.parse(JSON.stringify(src.details)) : null;
     return {
@@ -347,7 +448,7 @@
       const crValues = [...new Set(list.map((m) => m.cr).filter(Boolean))].sort((a, b) => crToFloat(a) - crToFloat(b));
       monsterVaultIndexCache.list = list;
       monsterVaultIndexCache.crValues = crValues;
-      monsterVaultIndexCache.ready = true;
+      monsterVaultIndexCache.ready = list.length > 0;
       return list;
     } catch (_) {
       resetMonsterVaultCache();
@@ -783,7 +884,24 @@
       monsterPicker.query = "";
       monsterPicker.cr = "all";
       monsterPicker.source = "all";
-      monsterVaultMonsters(true);
+
+      // Force refresh and auto-recover if stale filters/search would show no rows.
+      const all = monsterVaultMonsters(true);
+      if (Array.isArray(all) && all.length) {
+        const visible = all.filter((m) => {
+          if (monsterPicker.source !== "all" && m.sourceType !== monsterPicker.source) return false;
+          if (monsterPicker.cr !== "all" && m.cr !== monsterPicker.cr) return false;
+          if (!monsterPicker.query) return true;
+          const hay = `${m.name} ${m.cr} ${m.sizeType || ""} ${m.source || ""}`.toLowerCase();
+          return hay.includes(String(monsterPicker.query).toLowerCase());
+        });
+        if (!visible.length) {
+          monsterPicker.query = "";
+          monsterPicker.cr = "all";
+          monsterPicker.source = "all";
+        }
+      }
+
       render();
     }
 
