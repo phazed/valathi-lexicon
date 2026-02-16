@@ -1271,19 +1271,19 @@ function renderLibraryTab() {
     <div class="boxed-subsection">
       <div class="boxed-subsection-header">
         <div class="boxed-subsection-title">Create encounter entry</div>
-        <span class="hint-text">Name it, then save the current active combatants into the library.</span>
+        <span class="hint-text">Quick-create a blank encounter, then edit and add combatants below.</span>
       </div>
       <div class="row">
         <div class="col"><label>Name</label><input type="text" id="createName" placeholder="Ruined Tower Ambush" value="${esc(state.createName)}"></div>
         <div class="col"><label>Location</label><input type="text" id="createLocation" placeholder="Onyx frontier road" value="${esc(state.createLocation)}"></div>
         <div class="col" style="max-width:180px; display:flex; gap:6px; align-items:flex-end;">
-          <button class="btn btn-xs" id="createFromActiveBtn">Create from active</button>
+          <button class="btn btn-xs" id="quickCreateEncounterBtn">Quick create</button>
         </div>
       </div>
     </div>
 
     <div class="encounter-list">
-      ${rows || `<div class="hint-text">No encounters yet. Create one above.</div>`}
+      ${rows || `<div class="hint-text">No encounters yet. Quick create one above.</div>`}
     </div>
   `;
 }
@@ -2639,15 +2639,18 @@ function renderEditorModal() {
     });
   }
 
-  const createFromActiveBtn = shadow.getElementById("createFromActiveBtn");
-  if (createFromActiveBtn) {
-    createFromActiveBtn.addEventListener("click", () => {
-      const e = serializeActiveAsEncounter();
-      e.name = (state.createName || state.activeEncounterName || "New Encounter").trim() || "New Encounter";
-      e.tags = "";
-      e.location = (state.createLocation || "").trim();
+  const quickCreateEncounterBtn = shadow.getElementById("quickCreateEncounterBtn");
+  if (quickCreateEncounterBtn) {
+    quickCreateEncounterBtn.addEventListener("click", () => {
+      const e = {
+        id: uid("enc"),
+        name: (state.createName || "").trim() || `Encounter ${state.library.length + 1}`,
+        tags: "",
+        location: (state.createLocation || "").trim(),
+        combatants: []
+      };
       state.library.unshift(e);
-      state.activeLibraryId = e.id;
+      state.libraryEditId = e.id;
       state.createName = "";
       state.createLocation = "";
       persistAndRender();
