@@ -1,274 +1,288 @@
 // tool-encounter.js
-// Encounter / Initiative tool for Vrahune Toolbox.
+// Encounter / Initiative tool for Vrahune Toolbox
 (function () {
   if (window.__vrahuneEncounterToolLoaded) return;
   window.__vrahuneEncounterToolLoaded = true;
 
   const TOOL_ID = "encounterTool";
   const TOOL_NAME = "Encounter / Initiative";
-  const STORAGE_KEY = "vrahuneEncounterToolStateV2";
+  const STORAGE_KEY = "vrahuneEncounterToolStateV4";
+  const LEGACY_KEYS = ["vrahuneEncounterToolStateV3", "vrahuneEncounterToolStateV2"];
 
-  const DEFAULT_STATE = {
-    round: 3,
-    turnId: "c1",
-    nextId: 20,
-    activeEncounter: [
-      {
-        id: "c1",
-        name: "Vesper",
-        type: "PC",
-        ac: 16,
-        speed: 30,
-        hpCurrent: 27,
-        hpMax: 35,
-        portrait: "V"
-      },
-      {
-        id: "c2",
-        name: "Frostclaw Wolf",
-        type: "Enemy",
-        ac: 13,
-        speed: 40,
-        hpCurrent: 55,
-        hpMax: 55,
-        portrait: "W"
-      },
-      {
-        id: "c3",
-        name: "Bandit Captain",
-        type: "Enemy",
-        ac: 15,
-        speed: 30,
-        hpCurrent: 0,
-        hpMax: 65,
-        portrait: "B"
-      }
-    ],
-    savedParty: {
-      name: "Frostclaw Cell",
-      members: [
-        { name: "Vesper", type: "PC", ac: 16, speed: 30, hpCurrent: 27, hpMax: 35, portrait: "V" },
-        { name: "Arelix", type: "PC", ac: 15, speed: 30, hpCurrent: 31, hpMax: 31, portrait: "A" },
-        { name: "Lirael", type: "PC", ac: 14, speed: 30, hpCurrent: 24, hpMax: 24, portrait: "L" },
-        { name: "Thamar", type: "PC", ac: 17, speed: 25, hpCurrent: 38, hpMax: 38, portrait: "T" }
-      ]
-    },
-    library: [
-      {
-        id: "e1",
-        name: "Bandits on the Old Road",
-        tags: "3x Bandit · 1x Bandit Captain · CR ~3",
-        location: "Verdant Veil · Old trade route",
-        combatants: [
-          { name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11, portrait: "B" },
-          { name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11, portrait: "B" },
-          { name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11, portrait: "B" },
-          { name: "Bandit Captain", type: "Enemy", ac: 15, speed: 30, hpCurrent: 65, hpMax: 65, portrait: "B" }
-        ]
-      },
-      {
-        id: "e2",
-        name: "Frostclaw Gulf Patrol",
-        tags: "2x Frostclaw Wolf · 1x Clan Hunter",
-        location: "Frostclaw Wilds · Coastal ice",
-        combatants: [
-          { name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55, portrait: "W" },
-          { name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55, portrait: "W" },
-          { name: "Clan Hunter", type: "NPC", ac: 14, speed: 30, hpCurrent: 22, hpMax: 22, portrait: "C" }
-        ]
-      }
-    ]
-  };
-
-  function deepClone(obj) {
-    return JSON.parse(JSON.stringify(obj));
+  function uid(prefix = "id") {
+    return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}`;
   }
 
-  function clampInt(value, min, max) {
-    const n = parseInt(value, 10);
-    if (Number.isNaN(n)) return min;
+  function esc(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function intOr(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.trunc(n) : fallback;
+  }
+
+  function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
 
-  function asInt(value, fallback) {
-    const n = parseInt(value, 10);
-    return Number.isFinite(n) ? n : fallback;
+  function initialParties() {
+    return [
+      {
+        id: uid("party"),
+        name: "Frostclaw Cell",
+        members: [
+          { id: uid("m"), name: "Vesper", type: "PC", ac: 16, speed: 30, hpCurrent: 27, hpMax: 35 },
+          { id: uid("m"), name: "Arelix", type: "PC", ac: 15, speed: 30, hpCurrent: 31, hpMax: 31 },
+          { id: uid("m"), name: "Lirael", type: "PC", ac: 14, speed: 30, hpCurrent: 24, hpMax: 24 },
+          { id: uid("m"), name: "Thamar", type: "PC", ac: 18, speed: 25, hpCurrent: 39, hpMax: 39 }
+        ]
+      }
+    ];
   }
 
-  function normalizeType(type) {
-    const t = String(type || "").toLowerCase();
-    if (t === "pc") return "PC";
-    if (t === "npc") return "NPC";
-    return "Enemy";
-  }
+  function mkCombatant(raw = {}) {
+    const hpMax = Math.max(0, intOr(raw.hpMax, 10));
+    const hpCurrent = clamp(intOr(raw.hpCurrent, hpMax), 0, hpMax);
+    const type = ["PC", "NPC", "Enemy"].includes(raw.type) ? raw.type : "NPC";
 
-  function toPortrait(name, fallback) {
-    const n = (name || "").trim();
-    if (n) return n[0].toUpperCase();
-    if (fallback) return String(fallback).trim().slice(0, 1).toUpperCase() || "?";
-    return "?";
-  }
-
-  function normalizeCombatant(c, stateForId) {
-    const id = c && c.id ? String(c.id) : nextId(stateForId, "c");
-    const type = normalizeType(c && c.type);
-    let hpMax = Math.max(0, asInt(c && c.hpMax, 1));
-    let hpCurrent = Math.max(0, asInt(c && c.hpCurrent, hpMax));
-    if (hpCurrent > hpMax) hpCurrent = hpMax;
-
-    const name = String((c && c.name) || "Combatant").trim() || "Combatant";
     return {
-      id,
-      name,
+      id: raw.id || uid("c"),
+      name: String(raw.name || "Unnamed").trim() || "Unnamed",
       type,
-      ac: Math.max(0, asInt(c && c.ac, 10)),
-      speed: Math.max(0, asInt(c && c.speed, 30)),
+      ac: Math.max(0, intOr(raw.ac, 10)),
+      speed: Math.max(0, intOr(raw.speed, 30)),
       hpCurrent,
-      hpMax,
-      portrait: toPortrait(name, c && c.portrait)
+      hpMax
+    };
+  }
+
+  function cloneCombatant(c, withFreshId = false) {
+    return mkCombatant({ ...c, id: withFreshId ? uid("c") : c.id || uid("c") });
+  }
+
+  function summarizeEncounter(enc) {
+    if (!enc || !Array.isArray(enc.combatants) || !enc.combatants.length) {
+      return "No combatants";
+    }
+    const countByType = enc.combatants.reduce((acc, c) => {
+      const k = c.type || "NPC";
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+    const parts = [];
+    if (countByType.PC) parts.push(`${countByType.PC}x PC`);
+    if (countByType.NPC) parts.push(`${countByType.NPC}x NPC`);
+    if (countByType.Enemy) parts.push(`${countByType.Enemy}x Enemy`);
+    return parts.join(" · ");
+  }
+
+  function initialLibrary() {
+    return [
+      {
+        id: uid("enc"),
+        name: "Bandits on the Old Road",
+        tags: "CR ~3",
+        location: "Verdant Veil · Old trade route",
+        combatants: [
+          mkCombatant({ name: "Bandit Captain", type: "Enemy", ac: 15, speed: 30, hpCurrent: 65, hpMax: 65 }),
+          mkCombatant({ name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 }),
+          mkCombatant({ name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 }),
+          mkCombatant({ name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 })
+        ]
+      },
+      {
+        id: uid("enc"),
+        name: "Frostclaw Gulf Patrol",
+        tags: "Ambush",
+        location: "Frostclaw Wilds · Coastal ice",
+        combatants: [
+          mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
+          mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
+          mkCombatant({ name: "Clan Hunter", type: "NPC", ac: 14, speed: 30, hpCurrent: 32, hpMax: 32 })
+        ]
+      }
+    ];
+  }
+
+  function defaultState() {
+    const parties = initialParties();
+    const activeCombatants = [
+      mkCombatant({ name: "Vesper", type: "PC", ac: 16, speed: 30, hpCurrent: 27, hpMax: 35 }),
+      mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
+      mkCombatant({ name: "Bandit Captain", type: "Enemy", ac: 15, speed: 30, hpCurrent: 0, hpMax: 65 })
+    ];
+
+    return {
+      tab: "active",
+      round: 3,
+      turnIndex: 0,
+      activeEncounterName: "Current Encounter",
+      activeLibraryId: null,
+      activeCombatants,
+      addExpanded: true,
+      partyManagerOpen: false,
+      selectedPartyId: parties[0]?.id || null,
+      parties,
+      library: initialLibrary(),
+      createName: "",
+      createTags: "",
+      createLocation: "",
+      // add form for active
+      addDraft: {
+        name: "",
+        type: "NPC",
+        ac: 15,
+        speed: 30,
+        hpCurrent: 12,
+        hpMax: 12
+      },
+      // editor modal
+      editorOpen: false,
+      editorEncounterId: null,
+      editor: {
+        name: "",
+        tags: "",
+        location: "",
+        combatants: [],
+        addDraft: { name: "", type: "Enemy", ac: 13, speed: 30, hpCurrent: 10, hpMax: 10 }
+      }
     };
   }
 
   function normalizeState(raw) {
-    const base = deepClone(DEFAULT_STATE);
-    const merged = raw && typeof raw === "object" ? Object.assign(base, raw) : base;
+    const base = defaultState();
+    if (!raw || typeof raw !== "object") return base;
 
-    merged.round = Math.max(1, asInt(merged.round, 1));
-    merged.nextId = Math.max(1, asInt(merged.nextId, 1));
+    const state = { ...base, ...raw };
 
-    if (!merged.savedParty || typeof merged.savedParty !== "object") {
-      merged.savedParty = deepClone(DEFAULT_STATE.savedParty);
-    }
-    merged.savedParty.name = String(merged.savedParty.name || "Saved Party").trim() || "Saved Party";
-    if (!Array.isArray(merged.savedParty.members)) merged.savedParty.members = [];
+    state.tab = state.tab === "library" ? "library" : "active";
+    state.round = Math.max(1, intOr(state.round, 1));
+    state.turnIndex = Math.max(0, intOr(state.turnIndex, 0));
+    state.activeEncounterName = String(state.activeEncounterName || "Current Encounter");
+    state.activeLibraryId = state.activeLibraryId || null;
+    state.addExpanded = state.addExpanded !== false;
+    state.partyManagerOpen = !!state.partyManagerOpen;
 
-    merged.savedParty.members = merged.savedParty.members.map((m) => {
-      const temp = normalizeCombatant(
-        {
-          id: m && m.id,
-          name: m && m.name,
-          type: m && m.type,
-          ac: m && m.ac,
-          speed: m && m.speed,
-          hpCurrent: m && m.hpCurrent,
-          hpMax: m && m.hpMax,
-          portrait: m && m.portrait
-        },
-        merged
-      );
-      delete temp.id;
-      return temp;
-    });
+    state.activeCombatants = Array.isArray(state.activeCombatants)
+      ? state.activeCombatants.map((c) => mkCombatant(c))
+      : [];
 
-    if (!Array.isArray(merged.activeEncounter)) merged.activeEncounter = [];
-    merged.activeEncounter = merged.activeEncounter.map((c) => normalizeCombatant(c, merged));
-
-    if (!Array.isArray(merged.library)) merged.library = [];
-    merged.library = merged.library.map((entry) => {
-      const e = Object.assign({}, entry || {});
-      e.id = e.id ? String(e.id) : nextId(merged, "e");
-      e.name = String(e.name || "Untitled Encounter").trim() || "Untitled Encounter";
-      e.tags = String(e.tags || "").trim();
-      e.location = String(e.location || "").trim();
-      if (!Array.isArray(e.combatants)) e.combatants = [];
-      e.combatants = e.combatants.map((c) => {
-        const combatant = normalizeCombatant(c, merged);
-        delete combatant.id;
-        return combatant;
-      });
-      return e;
-    });
-
-    if (!merged.turnId || !merged.activeEncounter.some((c) => c.id === merged.turnId)) {
-      merged.turnId = merged.activeEncounter.length ? merged.activeEncounter[0].id : null;
+    if (state.activeCombatants.length === 0) {
+      state.turnIndex = 0;
+    } else {
+      state.turnIndex = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
     }
 
-    return merged;
+    state.parties = Array.isArray(state.parties)
+      ? state.parties.map((p) => ({
+          id: p.id || uid("party"),
+          name: String(p.name || "Party"),
+          members: Array.isArray(p.members) ? p.members.map((m) => mkCombatant({ ...m, id: m.id || uid("m") })) : []
+        }))
+      : base.parties;
+
+    if (!state.parties.length) {
+      state.parties = base.parties;
+    }
+
+    if (!state.selectedPartyId || !state.parties.some((p) => p.id === state.selectedPartyId)) {
+      state.selectedPartyId = state.parties[0]?.id || null;
+    }
+
+    state.library = Array.isArray(state.library)
+      ? state.library.map((e) => ({
+          id: e.id || uid("enc"),
+          name: String(e.name || "Untitled Encounter"),
+          tags: String(e.tags || ""),
+          location: String(e.location || ""),
+          combatants: Array.isArray(e.combatants) ? e.combatants.map((c) => mkCombatant(c)) : []
+        }))
+      : base.library;
+
+    if (state.activeLibraryId && !state.library.some((e) => e.id === state.activeLibraryId)) {
+      state.activeLibraryId = null;
+    }
+
+    state.createName = String(state.createName || "");
+    state.createTags = String(state.createTags || "");
+    state.createLocation = String(state.createLocation || "");
+
+    state.addDraft = {
+      name: String(state.addDraft?.name || ""),
+      type: ["PC", "NPC", "Enemy"].includes(state.addDraft?.type) ? state.addDraft.type : "NPC",
+      ac: Math.max(0, intOr(state.addDraft?.ac, 15)),
+      speed: Math.max(0, intOr(state.addDraft?.speed, 30)),
+      hpCurrent: Math.max(0, intOr(state.addDraft?.hpCurrent, 10)),
+      hpMax: Math.max(0, intOr(state.addDraft?.hpMax, 10))
+    };
+
+    state.editorOpen = !!state.editorOpen;
+    state.editorEncounterId = state.editorEncounterId || null;
+    const ed = state.editor || {};
+    state.editor = {
+      name: String(ed.name || ""),
+      tags: String(ed.tags || ""),
+      location: String(ed.location || ""),
+      combatants: Array.isArray(ed.combatants) ? ed.combatants.map((c) => mkCombatant(c)) : [],
+      addDraft: {
+        name: String(ed.addDraft?.name || ""),
+        type: ["PC", "NPC", "Enemy"].includes(ed.addDraft?.type) ? ed.addDraft.type : "Enemy",
+        ac: Math.max(0, intOr(ed.addDraft?.ac, 13)),
+        speed: Math.max(0, intOr(ed.addDraft?.speed, 30)),
+        hpCurrent: Math.max(0, intOr(ed.addDraft?.hpCurrent, 10)),
+        hpMax: Math.max(0, intOr(ed.addDraft?.hpMax, 10))
+      }
+    };
+
+    return state;
   }
 
   function loadState() {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return normalizeState(DEFAULT_STATE);
-      const parsed = JSON.parse(raw);
-      return normalizeState(parsed);
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return normalizeState(JSON.parse(raw));
+      for (const key of LEGACY_KEYS) {
+        const oldRaw = localStorage.getItem(key);
+        if (oldRaw) return normalizeState(JSON.parse(oldRaw));
+      }
     } catch (err) {
-      console.warn("Encounter tool: failed to load state, using defaults.", err);
-      return normalizeState(DEFAULT_STATE);
+      console.warn("Encounter tool: failed to load state", err);
     }
+    return defaultState();
   }
 
   function saveState(state) {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
-      console.warn("Encounter tool: failed to save state.", err);
+      console.warn("Encounter tool: failed to save state", err);
     }
   }
 
-  function nextId(state, prefix) {
-    const id = `${prefix}${state.nextId}`;
-    state.nextId += 1;
-    return id;
-  }
+  function registerEncounterTool() {
+    const def = {
+      id: TOOL_ID,
+      name: TOOL_NAME,
+      description: "Quick initiative tracker & encounter builder.",
+      render: renderEncounterTool
+    };
 
-  function escapeHtml(text) {
-    return String(text)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-
-  function typeClass(type) {
-    const t = normalizeType(type);
-    if (t === "PC") return "pc-card";
-    if (t === "NPC") return "npc-card";
-    return "enemy-card";
-  }
-
-  function getCurrentTurn(state) {
-    if (!state.turnId) return null;
-    return state.activeEncounter.find((c) => c.id === state.turnId) || null;
-  }
-
-  function getCurrentTurnIndex(state) {
-    if (!state.turnId) return -1;
-    return state.activeEncounter.findIndex((c) => c.id === state.turnId);
-  }
-
-  function ensureTurnId(state) {
-    if (!state.activeEncounter.length) {
-      state.turnId = null;
+    if (typeof window.registerTool === "function") {
+      window.registerTool(def);
       return;
     }
-    if (!state.turnId || !state.activeEncounter.some((c) => c.id === state.turnId)) {
-      state.turnId = state.activeEncounter[0].id;
+
+    window.toolsConfig = window.toolsConfig || [];
+    const exists = window.toolsConfig.some((t) => t.id === TOOL_ID);
+    if (!exists) {
+      window.toolsConfig.push({ id: TOOL_ID, name: TOOL_NAME, description: def.description });
     }
-  }
-
-  function copyPartyMemberToCombatant(member, state) {
-    return normalizeCombatant(
-      {
-        id: nextId(state, "c"),
-        name: member.name,
-        type: member.type,
-        ac: member.ac,
-        speed: member.speed,
-        hpCurrent: member.hpCurrent,
-        hpMax: member.hpMax,
-        portrait: member.portrait
-      },
-      state
-    );
-  }
-
-  function defaultNameForType(type, state) {
-    const normalized = normalizeType(type);
-    const base = normalized === "PC" ? "PC" : normalized === "NPC" ? "NPC" : "Enemy";
-    const same = state.activeEncounter.filter((c) => normalizeType(c.type) === normalized).length;
-    return `${base} ${same + 1}`;
   }
 
   function injectPanelOverrideCss() {
@@ -282,37 +296,10 @@
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
-        overflow: hidden !important;
-        display: block !important;
-      }
-
-      #generatorPanel.encounter-tool-panel > .encounter-host {
-        width: 100%;
-        height: 100%;
-        min-height: 0;
+        overflow: visible !important;
       }
     `;
     document.head.appendChild(style);
-  }
-
-  function registerEncounterTool() {
-    const def = {
-      id: TOOL_ID,
-      name: TOOL_NAME,
-      description: "Quick initiative tracker & encounter builder."
-    };
-
-    if (typeof window.registerTool === "function") {
-      window.registerTool({
-        ...def,
-        render: renderEncounterTool
-      });
-      return;
-    }
-
-    window.toolsConfig = window.toolsConfig || [];
-    const exists = window.toolsConfig.some((t) => t.id === TOOL_ID);
-    if (!exists) window.toolsConfig.push(def);
   }
 
   function renderEncounterTool() {
@@ -326,17 +313,536 @@
     panel.classList.add("encounter-tool-panel");
 
     const host = document.createElement("div");
-    host.className = "encounter-host";
+    host.style.display = "block";
+    host.style.width = "100%";
     panel.appendChild(host);
 
     const shadow = host.attachShadow({ mode: "open" });
-    shadow.innerHTML = `
+    const state = loadState();
+
+    const app = createApp(shadow, state);
+    app.render();
+  }
+
+  function createApp(shadow, initial) {
+    const state = initial;
+    let dragActiveId = null;
+    let dragEditorId = null;
+
+    function getSelectedParty() {
+      return state.parties.find((p) => p.id === state.selectedPartyId) || null;
+    }
+
+    function currentTurnName() {
+      if (!state.activeCombatants.length) return "—";
+      const idx = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
+      return state.activeCombatants[idx]?.name || "—";
+    }
+
+    function tagClass(type) {
+      if (type === "PC") return "pc-card";
+      if (type === "Enemy") return "enemy-card";
+      return "npc-card";
+    }
+
+    function initials(name) {
+      const s = String(name || "?").trim();
+      if (!s) return "?";
+      const parts = s.split(/\s+/).slice(0, 2);
+      return parts.map((p) => p.charAt(0).toUpperCase()).join("");
+    }
+
+    function moveItem(arr, fromId, toId) {
+      if (!Array.isArray(arr) || !fromId || !toId || fromId === toId) return arr;
+      const from = arr.findIndex((x) => x.id === fromId);
+      const to = arr.findIndex((x) => x.id === toId);
+      if (from < 0 || to < 0) return arr;
+      const copy = [...arr];
+      const [item] = copy.splice(from, 1);
+      copy.splice(to, 0, item);
+      return copy;
+    }
+
+    function moveToEnd(arr, fromId) {
+      const i = arr.findIndex((x) => x.id === fromId);
+      if (i < 0) return arr;
+      const copy = [...arr];
+      const [item] = copy.splice(i, 1);
+      copy.push(item);
+      return copy;
+    }
+
+    function serializeActiveAsEncounter(existing = null) {
+      const baseName = state.activeEncounterName?.trim() || "Current Encounter";
+      return {
+        id: existing?.id || uid("enc"),
+        name: existing?.name || baseName,
+        tags: existing?.tags || "",
+        location: existing?.location || "",
+        combatants: state.activeCombatants.map((c) => cloneCombatant(c, true))
+      };
+    }
+
+    function ensureTurnIndex() {
+      if (!state.activeCombatants.length) {
+        state.turnIndex = 0;
+      } else {
+        state.turnIndex = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
+      }
+    }
+
+    function openEditor(encounter) {
+      const enc = encounter || { id: null, name: "", tags: "", location: "", combatants: [] };
+      state.editorOpen = true;
+      state.editorEncounterId = enc.id || null;
+      state.editor = {
+        name: enc.name || "",
+        tags: enc.tags || "",
+        location: enc.location || "",
+        combatants: (enc.combatants || []).map((c) => cloneCombatant(c, true)),
+        addDraft: { name: "", type: "Enemy", ac: 13, speed: 30, hpCurrent: 10, hpMax: 10 }
+      };
+      persistAndRender();
+    }
+
+    function closeEditor() {
+      state.editorOpen = false;
+      state.editorEncounterId = null;
+      persistAndRender();
+    }
+
+    function persistAndRender() {
+      saveState(state);
+      render();
+    }
+
+    function renderTopTabs() {
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div class="tabs-row">
+            <button class="tab ${state.tab === "active" ? "active" : ""}" data-tab="active">Active Encounter</button>
+            <button class="tab ${state.tab === "library" ? "active" : ""}" data-tab="library">Encounter Library</button>
+          </div>
+          <div class="hint-text">Use this for combat, chases, stealth runs, or social scenes with turns.</div>
+        </div>
+      `;
+    }
+
+    function renderPartyManager(party) {
+      if (!party || !state.partyManagerOpen) return "";
+
+      const rows = party.members
+        .map((m, i) => {
+          return `
+            <div class="row" data-party-member-row="${esc(m.id)}">
+              <div class="col"><label>Name</label><input type="text" data-party-field="name" data-member-id="${esc(m.id)}" value="${esc(m.name)}"></div>
+              <div class="col" style="max-width:85px;"><label>Type</label>
+                <select data-party-field="type" data-member-id="${esc(m.id)}">
+                  <option ${m.type === "PC" ? "selected" : ""}>PC</option>
+                  <option ${m.type === "NPC" ? "selected" : ""}>NPC</option>
+                  <option ${m.type === "Enemy" ? "selected" : ""}>Enemy</option>
+                </select>
+              </div>
+              <div class="col" style="max-width:70px;"><label>AC</label><input type="number" min="0" data-party-field="ac" data-member-id="${esc(m.id)}" value="${m.ac}"></div>
+              <div class="col" style="max-width:90px;"><label>Speed</label><input type="number" min="0" data-party-field="speed" data-member-id="${esc(m.id)}" value="${m.speed}"></div>
+              <div class="col" style="max-width:90px;"><label>HP Cur</label><input type="number" min="0" data-party-field="hpCurrent" data-member-id="${esc(m.id)}" value="${m.hpCurrent}"></div>
+              <div class="col" style="max-width:90px;"><label>HP Max</label><input type="number" min="0" data-party-field="hpMax" data-member-id="${esc(m.id)}" value="${m.hpMax}"></div>
+              <div class="col" style="max-width:62px;"><label>&nbsp;</label><button class="btn btn-secondary btn-xs" data-party-remove="${esc(m.id)}">×</button></div>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="boxed-subsection" style="margin-top:6px;">
+          <div class="boxed-subsection-header">
+            <div class="boxed-subsection-title">Manage party preset</div>
+            <span class="hint-text">Preset AC / speed / HP used by quick add and add full party.</span>
+          </div>
+
+          <div class="row">
+            <div class="col" style="max-width:300px;">
+              <label>Party name</label>
+              <input type="text" id="partyNameInput" value="${esc(party.name)}">
+            </div>
+            <div class="col" style="max-width:120px;">
+              <label>&nbsp;</label>
+              <button class="btn btn-xs" id="partyAddMemberBtn">+ Add member</button>
+            </div>
+          </div>
+          ${rows || `<div class="hint-text">No party members yet.</div>`}
+        </div>
+      `;
+    }
+
+    function renderActiveTab() {
+      const party = getSelectedParty();
+      const addExpanded = !!state.addExpanded;
+
+      const addSectionBody = addExpanded
+        ? `
+          <div class="row">
+            <div class="col">
+              <label>Name</label>
+              <input type="text" id="addName" placeholder="Vesper, Goblin Scout, Frostclaw Wolf" value="${esc(state.addDraft.name)}">
+            </div>
+            <div class="col" style="max-width:85px;">
+              <label>AC</label>
+              <input type="number" min="0" id="addAC" value="${state.addDraft.ac}">
+            </div>
+            <div class="col" style="max-width:110px;">
+              <label>Speed (ft)</label>
+              <input type="number" min="0" id="addSpeed" value="${state.addDraft.speed}">
+            </div>
+            <div class="col" style="max-width:178px;">
+              <label>HP (current / max)</label>
+              <div style="display:flex; gap:4px;">
+                <input type="number" min="0" id="addHpCur" value="${state.addDraft.hpCurrent}">
+                <input type="number" min="0" id="addHpMax" value="${state.addDraft.hpMax}">
+              </div>
+            </div>
+            <div class="col" style="max-width:110px;">
+              <label>Type</label>
+              <select id="addType">
+                <option ${state.addDraft.type === "PC" ? "selected" : ""}>PC</option>
+                <option ${state.addDraft.type === "NPC" ? "selected" : ""}>NPC</option>
+                <option ${state.addDraft.type === "Enemy" ? "selected" : ""}>Enemy</option>
+              </select>
+            </div>
+            <div class="col" style="max-width:92px;">
+              <label>&nbsp;</label>
+              <button class="btn btn-xs" id="addCombatantBtn">Add</button>
+            </div>
+          </div>
+
+          <div class="party-strip">
+            <div class="party-row">
+              <span class="party-name">Saved party: ${esc(party?.name || "None")}</span>
+              <span class="hint-text">Click + to add one, or add all at once.</span>
+            </div>
+            <div class="party-row">
+              ${party
+                ? party.members
+                    .map(
+                      (m) => `<div class="party-chip">${esc(m.name)} <button title="Add to encounter" data-party-add-one="${esc(
+                        m.id
+                      )}">+</button></div>`
+                    )
+                    .join("")
+                : `<span class="hint-text">No members in selected party.</span>`}
+              <button class="btn btn-xs" id="addFullPartyBtn">Add full party</button>
+              <button class="btn btn-secondary btn-xs" id="togglePartyManagerBtn">${state.partyManagerOpen ? "Hide" : "Manage"} party</button>
+            </div>
+          </div>
+
+          ${renderPartyManager(party)}
+        `
+        : "";
+
+      const cards = state.activeCombatants
+        .map((c, i) => {
+          const active = i === state.turnIndex;
+          const downed = c.hpCurrent <= 0;
+          const typeClass = tagClass(c.type);
+          return `
+            <div class="card ${typeClass} ${active ? "active-turn" : ""} ${downed ? "downed" : ""}" draggable="true" data-card-id="${esc(c.id)}">
+              <div class="card-main">
+                <div class="card-portrait" title="Portrait">${esc(initials(c.name))}</div>
+                <div class="card-content">
+                  <div class="name-block">
+                    <div class="name-row">
+                      <input class="card-name-input" data-card-field="name" data-card-id="${esc(c.id)}" value="${esc(c.name)}" />
+                      <select class="card-type-input" data-card-field="type" data-card-id="${esc(c.id)}">
+                        <option ${c.type === "PC" ? "selected" : ""}>PC</option>
+                        <option ${c.type === "NPC" ? "selected" : ""}>NPC</option>
+                        <option ${c.type === "Enemy" ? "selected" : ""}>Enemy</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="hp-block">
+                    <span class="hp-label">HP:</span>
+                    <input class="tiny-num" type="number" min="0" data-card-field="hpCurrent" data-card-id="${esc(c.id)}" value="${c.hpCurrent}">
+                    <span>/</span>
+                    <input class="tiny-num" type="number" min="0" data-card-field="hpMax" data-card-id="${esc(c.id)}" value="${c.hpMax}">
+
+                    <input class="hp-amount-input" type="number" min="1" step="1" placeholder="1" data-amount-for="${esc(c.id)}">
+                    <div class="hp-buttons">
+                      <button class="btn btn-xs" data-dmg="${esc(c.id)}">Damage</button>
+                      <button class="btn btn-secondary btn-xs" data-heal="${esc(c.id)}">Heal</button>
+                    </div>
+                  </div>
+
+                  <div class="card-meta">
+                    <div class="card-meta-top">
+                      <span>AC:</span>
+                      <input class="tiny-num" type="number" min="0" data-card-field="ac" data-card-id="${esc(c.id)}" value="${c.ac}">
+                      <span>Spd:</span>
+                      <input class="tiny-num" type="number" min="0" data-card-field="speed" data-card-id="${esc(c.id)}" value="${c.speed}">
+                      <button class="btn-icon" title="Remove" data-remove-card="${esc(c.id)}">×</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="section-heading-row">
+          <div class="section-title">Active Encounter</div>
+          <div class="hint-text">Round & turn tracking with compact, draggable cards.</div>
+        </div>
+
+        <div class="row">
+          <div class="col" style="max-width:220px;">
+            <label>Encounter name</label>
+            <input type="text" id="activeEncounterName" value="${esc(state.activeEncounterName)}" placeholder="Current Encounter">
+          </div>
+          <div class="col" style="max-width:85px;">
+            <label>Round</label>
+            <input type="number" id="roundInput" min="1" value="${state.round}">
+          </div>
+          <div class="col">
+            <label>Current turn</label>
+            <input type="text" value="${esc(currentTurnName())}" readonly>
+          </div>
+          <div class="col" style="display:flex; gap:4px; justify-content:flex-end; max-width:220px;">
+            <button class="btn btn-xs" id="nextTurnBtn">Next turn</button>
+            <button class="btn btn-secondary btn-xs" id="nextRoundBtn">Next round</button>
+          </div>
+        </div>
+
+        <div class="boxed-subsection">
+          <div class="boxed-subsection-header">
+            <button class="btn btn-secondary btn-xs" id="toggleAddSectionBtn" style="gap:8px; border-radius:8px;">
+              <span class="chevron">${addExpanded ? "▾" : "▸"}</span>
+              <span>Add / edit combatants</span>
+            </button>
+            <span class="hint-text">Preload monsters or drop in ad-hoc PCs/NPCs.</span>
+          </div>
+          ${addSectionBody}
+        </div>
+
+        <div class="initiative-box">
+          <div class="section-heading-row">
+            <div class="section-title">Turn order</div>
+            <div class="hint-text">Drag cards up/down to set initiative. Top goes first.</div>
+          </div>
+          <div class="initiative-list" id="initiativeList">
+            ${cards || `<div class="hint-text">No combatants yet. Add one above or from party presets.</div>`}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderLibraryTab() {
+      const rows = state.library
+        .map((enc) => {
+          const isActive = enc.id === state.activeLibraryId;
+          const namesPreview = enc.combatants.slice(0, 5).map((c) => c.name).join(", ");
+          const more = enc.combatants.length > 5 ? ` +${enc.combatants.length - 5} more` : "";
+          return `
+            <div class="encounter-row ${isActive ? "encounter-row-active" : ""}" data-library-id="${esc(enc.id)}">
+              <div class="encounter-row-header">
+                <div>
+                  <div class="encounter-name">${esc(enc.name)} ${isActive ? `<span class="active-pill">ACTIVE</span>` : ""}</div>
+                  <div class="encounter-tags">${esc(summarizeEncounter(enc))}${enc.tags ? ` · ${esc(enc.tags)}` : ""}</div>
+                  <div class="hint-text">${enc.location ? esc(enc.location) : "No location set"}</div>
+                  <div class="hint-text">${enc.combatants.length ? esc(namesPreview + more) : "No combatants saved"}</div>
+                </div>
+              </div>
+              <div class="encounter-actions">
+                <button class="btn btn-xs" data-make-active="${esc(enc.id)}">${isActive ? "Active" : "Make active"}</button>
+                <button class="btn btn-secondary btn-xs" data-return-active="${esc(enc.id)}">Return active here</button>
+                <button class="btn btn-secondary btn-xs" data-edit-library="${esc(enc.id)}">Edit</button>
+                <button class="btn btn-secondary btn-xs" data-delete-library="${esc(enc.id)}">Delete</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="section-heading-row">
+          <div class="section-title">Encounter Library</div>
+          <div class="hint-text">Build, save, activate, and revise encounters.</div>
+        </div>
+
+        <div class="boxed-subsection">
+          <div class="boxed-subsection-header">
+            <div class="boxed-subsection-title">Create encounter entry</div>
+            <span class="hint-text">Name it, then save the current active combatants into the library.</span>
+          </div>
+          <div class="row">
+            <div class="col"><label>Name</label><input type="text" id="createName" placeholder="Ruined Tower Ambush" value="${esc(state.createName)}"></div>
+            <div class="col"><label>Tags</label><input type="text" id="createTags" placeholder="CR~4, undead" value="${esc(state.createTags)}"></div>
+          </div>
+          <div class="row">
+            <div class="col"><label>Location</label><input type="text" id="createLocation" placeholder="Onyx frontier road" value="${esc(state.createLocation)}"></div>
+            <div class="col" style="max-width:230px; display:flex; gap:6px; align-items:flex-end;">
+              <button class="btn btn-xs" id="createFromActiveBtn">Create from active</button>
+              <button class="btn btn-secondary btn-xs" id="createBlankAndEditBtn">Blank + edit popup</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="party-strip">
+          <div class="party-row">
+            <span class="party-name">Current active: ${esc(state.activeEncounterName || "Current Encounter")}</span>
+            <span class="hint-text">${state.activeCombatants.length} combatant(s)</span>
+          </div>
+          <div class="party-row">
+            <button class="btn btn-xs" id="returnActiveBtn">Return active to library</button>
+            <button class="btn btn-secondary btn-xs" id="openNewEditorBtn">Open editor popup (new)</button>
+          </div>
+        </div>
+
+        <div class="encounter-list">
+          ${rows || `<div class="hint-text">No encounters yet. Create one above.</div>`}
+        </div>
+      `;
+    }
+
+    function renderEditorModal() {
+      if (!state.editorOpen) return "";
+
+      const party = getSelectedParty();
+      const cards = state.editor.combatants
+        .map((c) => {
+          const downed = c.hpCurrent <= 0;
+          const typeClass = tagClass(c.type);
+          return `
+            <div class="card ${typeClass} ${downed ? "downed" : ""}" draggable="true" data-editor-card-id="${esc(c.id)}">
+              <div class="card-main">
+                <div class="card-portrait">${esc(initials(c.name))}</div>
+                <div class="card-content">
+                  <div class="name-block">
+                    <div class="name-row">
+                      <input class="card-name-input" data-editor-field="name" data-editor-id="${esc(c.id)}" value="${esc(c.name)}" />
+                      <select class="card-type-input" data-editor-field="type" data-editor-id="${esc(c.id)}">
+                        <option ${c.type === "PC" ? "selected" : ""}>PC</option>
+                        <option ${c.type === "NPC" ? "selected" : ""}>NPC</option>
+                        <option ${c.type === "Enemy" ? "selected" : ""}>Enemy</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="hp-block">
+                    <span class="hp-label">HP:</span>
+                    <input class="tiny-num" type="number" min="0" data-editor-field="hpCurrent" data-editor-id="${esc(c.id)}" value="${c.hpCurrent}">
+                    <span>/</span>
+                    <input class="tiny-num" type="number" min="0" data-editor-field="hpMax" data-editor-id="${esc(c.id)}" value="${c.hpMax}">
+                    <input class="hp-amount-input" type="number" min="1" step="1" placeholder="1" data-editor-amount-for="${esc(c.id)}">
+                    <div class="hp-buttons">
+                      <button class="btn btn-xs" data-editor-dmg="${esc(c.id)}">Damage</button>
+                      <button class="btn btn-secondary btn-xs" data-editor-heal="${esc(c.id)}">Heal</button>
+                    </div>
+                  </div>
+
+                  <div class="card-meta">
+                    <div class="card-meta-top">
+                      <span>AC:</span>
+                      <input class="tiny-num" type="number" min="0" data-editor-field="ac" data-editor-id="${esc(c.id)}" value="${c.ac}">
+                      <span>Spd:</span>
+                      <input class="tiny-num" type="number" min="0" data-editor-field="speed" data-editor-id="${esc(c.id)}" value="${c.speed}">
+                      <button class="btn-icon" title="Remove" data-editor-remove="${esc(c.id)}">×</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="modal-overlay" id="editorOverlay"></div>
+        <div class="modal" role="dialog" aria-modal="true" aria-label="Edit encounter">
+          <div class="modal-header">
+            <div>
+              <div class="title" style="font-size:0.88rem; letter-spacing:0.08em;">Edit Encounter</div>
+              <div class="hint-text">Add party members, add custom combatants, and drag to set order.</div>
+            </div>
+            <button class="btn btn-secondary btn-xs" id="editorCloseTopBtn">Close</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="row">
+              <div class="col"><label>Name</label><input type="text" id="editorName" value="${esc(state.editor.name)}"></div>
+              <div class="col"><label>Tags</label><input type="text" id="editorTags" value="${esc(state.editor.tags)}"></div>
+            </div>
+            <div class="row">
+              <div class="col"><label>Location</label><input type="text" id="editorLocation" value="${esc(state.editor.location)}"></div>
+            </div>
+
+            <div class="boxed-subsection">
+              <div class="boxed-subsection-header">
+                <div class="boxed-subsection-title">Quick add from party</div>
+                <span class="hint-text">Uses your saved party preset stats.</span>
+              </div>
+              <div class="party-row">
+                <span class="party-name">${esc(party?.name || "No party selected")}</span>
+                ${party
+                  ? party.members
+                      .map(
+                        (m) => `<div class="party-chip">${esc(m.name)} <button data-editor-add-party-one="${esc(m.id)}" title="Add">+</button></div>`
+                      )
+                      .join("")
+                  : ""}
+                <button class="btn btn-xs" id="editorAddFullPartyBtn">Add full party</button>
+              </div>
+            </div>
+
+            <div class="boxed-subsection">
+              <div class="boxed-subsection-header">
+                <div class="boxed-subsection-title">Add combatant</div>
+                <span class="hint-text">Same fields as active encounter cards.</span>
+              </div>
+              <div class="row">
+                <div class="col"><label>Name</label><input type="text" id="editorAddName" value="${esc(state.editor.addDraft.name)}" placeholder="Goblin, Veteran, Mage"></div>
+                <div class="col" style="max-width:84px;"><label>Type</label>
+                  <select id="editorAddType">
+                    <option ${state.editor.addDraft.type === "PC" ? "selected" : ""}>PC</option>
+                    <option ${state.editor.addDraft.type === "NPC" ? "selected" : ""}>NPC</option>
+                    <option ${state.editor.addDraft.type === "Enemy" ? "selected" : ""}>Enemy</option>
+                  </select>
+                </div>
+                <div class="col" style="max-width:70px;"><label>AC</label><input type="number" min="0" id="editorAddAC" value="${state.editor.addDraft.ac}"></div>
+                <div class="col" style="max-width:90px;"><label>Speed</label><input type="number" min="0" id="editorAddSpeed" value="${state.editor.addDraft.speed}"></div>
+                <div class="col" style="max-width:88px;"><label>HP Cur</label><input type="number" min="0" id="editorAddHpCur" value="${state.editor.addDraft.hpCurrent}"></div>
+                <div class="col" style="max-width:88px;"><label>HP Max</label><input type="number" min="0" id="editorAddHpMax" value="${state.editor.addDraft.hpMax}"></div>
+                <div class="col" style="max-width:80px;"><label>&nbsp;</label><button class="btn btn-xs" id="editorAddCombatantBtn">Add</button></div>
+              </div>
+            </div>
+
+            <div class="initiative-box">
+              <div class="section-heading-row">
+                <div class="section-title">Encounter combatants (${state.editor.combatants.length})</div>
+                <div class="hint-text">Drag to reorder.</div>
+              </div>
+              <div class="initiative-list" id="editorInitiativeList">
+                ${cards || `<div class="hint-text">No combatants yet.</div>`}
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-secondary btn-xs" id="editorCancelBtn">Cancel</button>
+            <button class="btn btn-xs" id="editorSaveBtn">Save encounter</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function template() {
+      return `
       <style>
         :host {
           --bg-main: #050608;
           --bg-panel: #0b0f14;
           --border-subtle: #232a33;
-          --accent: #c0c0c0;
           --accent-soft: #808890;
           --accent-strong: #f5f5f5;
           --danger: #ff5c5c;
@@ -346,36 +852,28 @@
           --radius-lg: 14px;
           --radius-md: 10px;
           --radius-sm: 6px;
-          display: block;
-          width: 100%;
-          height: 100%;
-          min-height: 0;
         }
 
-        * {
-          box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         .encounter-body {
           margin: 0;
           padding: 0;
           width: 100%;
-          height: 100%;
-          min-height: 0;
+          background: radial-gradient(circle at top left, #151921 0, #050608 40%, #000000 100%);
           color: var(--text-main);
           font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
           -webkit-font-smoothing: antialiased;
-          display: block;
         }
 
         .preview-shell {
           width: 100%;
-          min-height: 100%;
+          max-width: 100%;
           background: var(--bg-panel);
-          border-radius: 12px;
+          border-radius: var(--radius-lg);
           border: 1px solid var(--border-subtle);
           padding: 10px 12px;
-          box-shadow: 0 0 24px rgba(0,0,0,0.45);
+          box-shadow: 0 0 24px rgba(0,0,0,0.55);
           display: flex;
           flex-direction: column;
           gap: 8px;
@@ -386,6 +884,7 @@
           justify-content: space-between;
           align-items: baseline;
           gap: 8px;
+          flex-wrap: wrap;
         }
 
         .title {
@@ -441,8 +940,8 @@
           display: flex;
           flex-direction: column;
           gap: 8px;
-          min-height: 0;
-          flex: 1 1 auto;
+          max-height: calc(100vh - 190px);
+          min-height: 220px;
           overflow-y: auto;
         }
 
@@ -483,13 +982,11 @@
           -webkit-appearance: none;
           margin: 0;
         }
-
         input[type=number] {
           -moz-appearance: textfield;
         }
 
-        input:focus,
-        select:focus {
+        input:focus, select:focus {
           outline: none;
           border-color: #9aa2af;
           box-shadow: 0 0 0 1px rgba(192,192,192,0.4);
@@ -508,26 +1005,13 @@
           gap: 4px;
           background: #181f2b;
           color: var(--accent-strong);
-          transition: transform 0.06s ease-out, background 0.16s ease;
         }
-
-        .btn:hover {
-          background: #232c3c;
-        }
-
-        .btn:active {
-          transform: translateY(1px);
-        }
+        .btn:hover { filter: brightness(1.08); }
 
         .btn-secondary {
           background: #080b11;
           border-color: #303641;
           color: var(--text-muted);
-        }
-
-        .btn-secondary:hover {
-          background: #0f141d;
-          color: var(--accent-strong);
         }
 
         .btn-xs {
@@ -545,9 +1029,7 @@
           cursor: pointer;
         }
 
-        .btn-icon:hover {
-          color: #ff9999;
-        }
+        .btn-icon:hover { color: #ff9999; }
 
         .section-divider {
           border: none;
@@ -560,21 +1042,13 @@
           justify-content: space-between;
           align-items: baseline;
           gap: 8px;
+          flex-wrap: wrap;
         }
 
-        .section-title {
-          font-size: 0.82rem;
-          color: var(--accent-soft);
-        }
+        .section-title { font-size: 0.82rem; color: var(--accent-soft); }
+        .hint-text { font-size: 0.74rem; color: var(--text-muted); }
 
-        .hint-text {
-          font-size: 0.74rem;
-          color: var(--text-muted);
-        }
-
-        .boxed-subsection,
-        .initiative-box,
-        .party-strip {
+        .boxed-subsection {
           border-radius: 10px;
           border: 1px solid #262c37;
           background: rgba(5, 7, 12, 0.85);
@@ -589,6 +1063,7 @@
           justify-content: space-between;
           align-items: center;
           gap: 6px;
+          flex-wrap: wrap;
         }
 
         .boxed-subsection-title {
@@ -599,50 +1074,23 @@
           gap: 6px;
         }
 
-        .boxed-subsection-title-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          border: none;
-          background: transparent;
-          color: inherit;
-          font: inherit;
-          padding: 0;
-          margin: 0;
-          cursor: pointer;
-        }
+        .chevron { font-size: 0.9rem; color: var(--accent-soft); }
 
-        .boxed-subsection-body {
+        .initiative-box {
+          border-radius: 10px;
+          border: 1px solid #262c37;
+          background: #05070c;
+          padding: 6px 8px;
           display: flex;
           flex-direction: column;
-          gap: 8px;
-        }
-
-        .boxed-subsection.collapsed .boxed-subsection-body {
-          display: none;
-        }
-
-        .chevron {
-          font-size: 0.9rem;
-          color: var(--accent-soft);
-          width: 10px;
-          text-align: center;
+          gap: 6px;
         }
 
         .initiative-list {
           display: flex;
           flex-direction: column;
           gap: 4px;
-          min-height: 56px;
-        }
-
-        .initiative-empty {
-          border: 1px dashed #303641;
-          border-radius: 8px;
-          padding: 10px;
-          color: var(--text-muted);
-          font-size: 0.76rem;
-          text-align: center;
+          min-height: 18px;
         }
 
         .card {
@@ -655,35 +1103,13 @@
           cursor: grab;
         }
 
-        .card:active {
-          cursor: grabbing;
-        }
+        .card.dragging { opacity: 0.45; }
 
-        .card.dragging {
-          opacity: 0.4;
-          border-style: dashed;
-        }
+        .pc-card { background: linear-gradient(120deg, #0b101c, #05070c); border-color: #2e3b57; }
+        .enemy-card { background: linear-gradient(120deg, #16090d, #05070c); border-color: #4a2028; }
+        .npc-card { background: linear-gradient(120deg, #101010, #05070c); border-color: #33363f; }
 
-        .pc-card {
-          background: linear-gradient(120deg, #0b101c, #05070c);
-          border-color: #2e3b57;
-        }
-
-        .enemy-card {
-          background: linear-gradient(120deg, #16090d, #05070c);
-          border-color: #4a2028;
-        }
-
-        .npc-card {
-          background: linear-gradient(120deg, #101010, #05070c);
-          border-color: #33363f;
-        }
-
-        .card-main {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
+        .card-main { display: flex; align-items: center; gap: 8px; }
 
         .card-portrait {
           flex-shrink: 0;
@@ -698,57 +1124,34 @@
           color: var(--accent-strong);
           font-weight: 600;
           font-size: 0.9rem;
-          user-select: none;
+          cursor: default;
         }
 
-        .enemy-card .card-portrait {
-          background: radial-gradient(circle at top left, #3a2025, #05070c);
-        }
+        .enemy-card .card-portrait { background: radial-gradient(circle at top left, #3a2025, #05070c); }
 
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(0, 1.6fr) auto minmax(0, 1.2fr);
+          grid-template-columns: minmax(140px,1.7fr) auto minmax(120px,1.1fr);
           align-items: center;
           column-gap: 8px;
         }
 
-        .name-block {
-          min-width: 0;
-        }
+        .name-block { min-width: 0; }
+        .name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
-        .name-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
+        .card-name-input {
           min-width: 0;
-        }
-
-        .card-name {
           font-weight: 600;
-          font-size: 1.0rem;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          font-size: 0.86rem;
+          padding: 3px 6px;
         }
 
-        .card-tag {
+        .card-type-input {
+          width: 78px;
+          min-width: 78px;
           font-size: 0.72rem;
-          padding: 1px 6px;
-          border-radius: 999px;
-          border: 1px solid #303641;
-          color: var(--text-muted);
-          white-space: nowrap;
-        }
-
-        .pc-card .card-tag {
-          border-color: #3b5678;
-          color: #b8c8ff;
-        }
-
-        .enemy-card .card-tag {
-          border-color: #6b2c38;
-          color: #ffb8c0;
+          padding: 3px 6px;
         }
 
         .hp-block {
@@ -760,37 +1163,21 @@
           min-width: 0;
         }
 
-        .hp-label {
-          font-size: 1.0rem;
-          font-weight: 600;
-          white-space: nowrap;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          text-align: center;
-        }
+        .hp-label { font-size: 0.86rem; font-weight: 600; white-space: nowrap; }
 
-        .hp-inline {
-          width: 44px !important;
-          min-width: 44px;
-          padding: 2px 3px !important;
-          font-size: 0.88rem !important;
+        .tiny-num {
+          width: 52px !important;
+          min-width: 52px;
+          padding: 3px 4px !important;
+          font-size: 0.75rem !important;
           text-align: center;
-          font-weight: 600;
-        }
-
-        .hp-divider {
-          color: var(--text-muted);
-          font-size: 0.9rem;
         }
 
         .hp-amount-input {
-          flex: 0 0 38px;
-          width: 38px !important;
-          min-width: 0;
-          padding: 0;
-          font-size: 0.65rem;
-          line-height: 1;
+          width: 42px !important;
+          min-width: 42px;
+          padding: 3px 4px !important;
+          font-size: 0.72rem;
           text-align: center;
         }
 
@@ -807,26 +1194,13 @@
           flex-direction: column;
           align-items: flex-end;
           gap: 2px;
-          font-size: 0.82rem;
+          font-size: 0.8rem;
           white-space: nowrap;
           font-weight: 500;
           justify-self: end;
         }
 
-        .card-meta-top {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .meta-inline {
-          width: 36px !important;
-          min-width: 36px;
-          padding: 2px 3px !important;
-          font-size: 0.76rem !important;
-          text-align: center;
-          font-weight: 600;
-        }
+        .card-meta-top { display: flex; align-items: center; gap: 4px; }
 
         .card.active-turn {
           border-color: #c0c0c0;
@@ -837,7 +1211,7 @@
         .card.downed {
           border-color: var(--danger);
           background: #1a0506;
-          opacity: 0.9;
+          opacity: 0.95;
         }
 
         .encounter-list {
@@ -854,11 +1228,16 @@
           border-radius: 8px;
           border: 1px solid #262c37;
           background: #080b11;
-          padding: 4px 6px;
+          padding: 6px;
           font-size: 0.8rem;
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 3px;
+        }
+
+        .encounter-row-active {
+          border-color: #5a6376;
+          box-shadow: 0 0 0 1px rgba(192,192,192,0.2);
         }
 
         .encounter-row-header {
@@ -868,14 +1247,19 @@
           gap: 6px;
         }
 
-        .encounter-name {
-          font-weight: 500;
+        .encounter-name { font-weight: 600; }
+
+        .active-pill {
+          display: inline-block;
+          margin-left: 6px;
+          font-size: 0.66rem;
+          padding: 1px 6px;
+          border-radius: 999px;
+          border: 1px solid #4b5465;
+          color: #d6def3;
         }
 
-        .encounter-tags {
-          font-size: 0.72rem;
-          color: var(--text-muted);
-        }
+        .encounter-tags { font-size: 0.72rem; color: var(--text-muted); }
 
         .encounter-actions {
           display: flex;
@@ -884,11 +1268,28 @@
           margin-top: 2px;
         }
 
+        .party-strip {
+          border-radius: 10px;
+          border: 1px solid #262c37;
+          background: #05070c;
+          padding: 6px 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
         .party-row {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
           gap: 4px;
+        }
+
+        .party-name {
+          font-size: 0.78rem;
+          color: var(--accent-soft);
+          font-weight: 500;
+          margin-right: 4px;
         }
 
         .party-chip {
@@ -912,1048 +1313,734 @@
           padding: 0 2px;
         }
 
-        .party-chip button:hover {
-          color: var(--accent-strong);
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.55);
+          z-index: 30;
         }
 
-        .party-editor {
-          border-radius: 8px;
-          border: 1px solid #222832;
-          background: #070a10;
-          padding: 8px;
+        .modal {
+          position: fixed;
+          z-index: 31;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: min(1100px, calc(100vw - 28px));
+          max-height: calc(100vh - 28px);
+          display: flex;
+          flex-direction: column;
+          border-radius: 12px;
+          border: 1px solid #2b3240;
+          background: #0a0e15;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+          overflow: hidden;
+        }
+
+        .modal-header, .modal-footer {
+          padding: 10px 12px;
+          border-bottom: 1px solid #1f2530;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          background: #0c1119;
+        }
+
+        .modal-footer {
+          border-top: 1px solid #1f2530;
+          border-bottom: none;
+          justify-content: flex-end;
+        }
+
+        .modal-body {
+          padding: 10px 12px;
+          overflow: auto;
           display: flex;
           flex-direction: column;
           gap: 8px;
+          background: radial-gradient(circle at top left, #10151f, #05070c 70%);
         }
 
-        .party-editor-list {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .party-member-row {
-          border-radius: 8px;
-          border: 1px solid #262c37;
-          background: #080b11;
-          padding: 6px;
-          display: grid;
-          grid-template-columns: minmax(120px, 1.4fr) 90px 60px 70px 84px 84px 30px;
-          gap: 6px;
-          align-items: end;
-        }
-
-        .party-member-row .field label {
-          margin-bottom: 2px;
-          font-size: 0.7rem;
-        }
-
-        .party-member-row .field input,
-        .party-member-row .field select {
-          font-size: 0.75rem;
-          padding: 4px 6px;
-        }
-
-        .party-remove {
-          border: none;
-          background: transparent;
-          color: #d98a8a;
-          font-size: 0.95rem;
-          cursor: pointer;
-          line-height: 1;
-          padding: 0;
-          margin-bottom: 5px;
-        }
-
-        .party-remove:hover { color: #ff9999; }
-
-        code {
-          font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
-          font-size: 0.74rem;
-          background: rgba(255,255,255,0.04);
-          padding: 0 3px;
-          border-radius: 4px;
-        }
-
-        .hidden {
-          display: none !important;
-        }
-
-        @media (max-width: 1040px) {
-          .party-member-row {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-          }
-
-          .party-member-row .field:last-of-type,
-          .party-member-row .party-remove {
-            grid-column: span 1;
-          }
-        }
-
-        @media (max-width: 920px) {
-          .card-content {
-            grid-template-columns: 1fr;
-            row-gap: 6px;
-          }
-
-          .card-meta,
-          .hp-block {
-            justify-self: start;
-            align-items: flex-start;
-          }
-
-          .card-meta {
-            align-items: flex-start;
-          }
-
-          .party-member-row {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
+        @media (max-width: 860px) {
+          .card-content { grid-template-columns: 1fr; row-gap: 4px; }
+          .card-meta { justify-self: start; align-items: flex-start; }
+          .hp-block { justify-self: start; }
+          .modal { width: calc(100vw - 14px); }
         }
       </style>
+
       <div class="encounter-body">
         <div class="preview-shell">
           <div class="header-line">
             <div>
               <div class="title">Encounter / Initiative</div>
-              <div class="subtitle">
-                Quick initiative tracker & encounter builder – designed to live on the right side of your toolbox.
-              </div>
+              <div class="subtitle">Quick initiative tracker & encounter builder – right panel tool.</div>
             </div>
-            <div class="label-pill">Tool · Right Panel</div>
+            <div class="label-pill">Tool · Functional</div>
           </div>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-            <div class="tabs-row" role="tablist" aria-label="Encounter tabs">
-              <button id="tabActive" class="tab active" data-action="tab-active" type="button">Active Encounter</button>
-              <button id="tabLibrary" class="tab" data-action="tab-library" type="button">Encounter Library</button>
-            </div>
-            <div class="hint-text">
-              Use this even outside combat (stealth runs, chases, social scenes with “turns”).
-            </div>
-          </div>
+          ${renderTopTabs()}
 
           <div class="panel-inner">
-            <div id="activeTabContent">
-              <div class="section-heading-row">
-                <div class="section-title">Active Encounter</div>
-                <div class="hint-text">Round & turn tracking with compact, draggable cards.</div>
-              </div>
-
-              <div class="row">
-                <div class="col" style="max-width:80px;">
-                  <label for="roundInput">Round</label>
-                  <input id="roundInput" type="number" value="1" min="1">
-                </div>
-                <div class="col">
-                  <label for="currentTurnInput">Current turn</label>
-                  <input id="currentTurnInput" type="text" value="" readonly>
-                </div>
-                <div class="col" style="display:flex; gap:4px; justify-content:flex-end;">
-                  <button class="btn btn-xs" data-action="next-turn" type="button">Next turn</button>
-                  <button class="btn btn-secondary btn-xs" data-action="next-round" type="button">Next round</button>
-                </div>
-              </div>
-
-              <div id="addEditSection" class="boxed-subsection">
-                <div class="boxed-subsection-header">
-                  <div class="boxed-subsection-title">
-                    <button class="boxed-subsection-title-btn" data-action="toggle-add-section" type="button" aria-expanded="true">
-                      <span id="addSectionChevron" class="chevron">▾</span>
-                      <span>Add / edit combatants</span>
-                    </button>
-                  </div>
-                  <span class="hint-text">Quick add party members, tweak presets, or add any combatant manually.</span>
-                </div>
-                <div id="addEditBody" class="boxed-subsection-body">
-                  <div class="row">
-                    <div class="col">
-                      <label>Party preset · <span id="partyPresetMeta" class="hint-text"></span></label>
-                      <div id="partyChipRow" class="party-row"></div>
-                    </div>
-                    <div class="col" style="max-width:260px;">
-                      <label>&nbsp;</label>
-                      <div style="display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
-                        <button class="btn btn-xs" data-action="add-full-party" type="button">Add full party</button>
-                        <button class="btn btn-secondary btn-xs" data-action="toggle-party-editor" type="button">Manage party preset</button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div id="partyEditor" class="party-editor hidden">
-                    <div class="row">
-                      <div class="col">
-                        <label for="partyNameInput">Party name</label>
-                        <input id="partyNameInput" type="text" placeholder="Frostclaw Cell" />
-                      </div>
-                      <div class="col" style="max-width:170px;">
-                        <label>&nbsp;</label>
-                        <button class="btn btn-xs" data-action="party-add-member" type="button">+ Add member</button>
-                      </div>
-                    </div>
-                    <div id="partyEditorList" class="party-editor-list"></div>
-                  </div>
-
-                  <hr class="section-divider" />
-
-                  <div class="row">
-                    <div class="col">
-                      <label for="addName">Name</label>
-                      <input id="addName" type="text" placeholder="Vesper, Goblin Scout, Frostclaw Wolf">
-                    </div>
-                    <div class="col" style="max-width:80px;">
-                      <label for="addAc">AC</label>
-                      <input id="addAc" type="number" value="15" min="0">
-                    </div>
-                    <div class="col" style="max-width:100px;">
-                      <label for="addSpeed">Speed (ft)</label>
-                      <input id="addSpeed" type="number" value="30" min="0">
-                    </div>
-                    <div class="col" style="max-width:170px;">
-                      <label>HP (current / max)</label>
-                      <div style="display:flex; gap:4px;">
-                        <input id="addHpCur" type="number" value="27" min="0">
-                        <input id="addHpMax" type="number" value="35" min="0">
-                      </div>
-                    </div>
-                    <div class="col" style="max-width:110px;">
-                      <label for="addType">Type</label>
-                      <select id="addType">
-                        <option>PC</option>
-                        <option>NPC</option>
-                        <option>Enemy</option>
-                      </select>
-                    </div>
-                    <div class="col" style="max-width:90px;">
-                      <label>&nbsp;</label>
-                      <button class="btn btn-xs" data-action="add-combatant" type="button">Add</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="initiative-box">
-                <div class="section-heading-row">
-                  <div class="section-title">Turn order</div>
-                  <div class="hint-text">Drag cards up/down to set initiative. Top goes first.</div>
-                </div>
-
-                <div id="initiativeList" class="initiative-list"></div>
-              </div>
-            </div>
-
-            <div id="libraryTabContent" class="hidden">
-              <div class="section-heading-row">
-                <div class="section-title">Encounter Library</div>
-                <div class="hint-text">Build encounters here, then load them into the Active view with one click.</div>
-              </div>
-
-              <div class="boxed-subsection">
-                <div class="boxed-subsection-header">
-                  <div class="boxed-subsection-title">Create encounter</div>
-                  <span class="hint-text">Save current active combatants or make a blank entry to edit later.</span>
-                </div>
-                <div class="row">
-                  <div class="col">
-                    <label for="libNameInput">Name</label>
-                    <input id="libNameInput" type="text" placeholder="Bandits on the Old Road" />
-                  </div>
-                  <div class="col">
-                    <label for="libTagsInput">Tags</label>
-                    <input id="libTagsInput" type="text" placeholder="3x Bandit · 1x Captain · CR~3" />
-                  </div>
-                  <div class="col">
-                    <label for="libLocationInput">Location</label>
-                    <input id="libLocationInput" type="text" placeholder="Verdant Veil · Old trade route" />
-                  </div>
-                  <div class="col" style="max-width:270px;">
-                    <label>&nbsp;</label>
-                    <div style="display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
-                      <button class="btn btn-xs" data-action="create-from-active" type="button">Save active as encounter</button>
-                      <button class="btn btn-secondary btn-xs" data-action="create-blank-encounter" type="button">Create blank</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div id="encounterList" class="encounter-list"></div>
-
-              <div class="hint-text">
-                State is saved to <code>localStorage</code> automatically for this browser.
-              </div>
-            </div>
+            ${state.tab === "active" ? renderActiveTab() : renderLibraryTab()}
           </div>
         </div>
       </div>
-    `;
 
-    const state = loadState();
-    if (!state.ui || typeof state.ui !== "object") state.ui = {};
-    if (typeof state.ui.addSectionOpen !== "boolean") state.ui.addSectionOpen = true;
-    if (typeof state.ui.partyEditorOpen !== "boolean") state.ui.partyEditorOpen = false;
-
-    const refs = {
-      roundInput: shadow.getElementById("roundInput"),
-      currentTurnInput: shadow.getElementById("currentTurnInput"),
-      partyPresetMeta: shadow.getElementById("partyPresetMeta"),
-      partyChipRow: shadow.getElementById("partyChipRow"),
-      partyEditor: shadow.getElementById("partyEditor"),
-      partyNameInput: shadow.getElementById("partyNameInput"),
-      partyEditorList: shadow.getElementById("partyEditorList"),
-      addEditSection: shadow.getElementById("addEditSection"),
-      addSectionChevron: shadow.getElementById("addSectionChevron"),
-      addName: shadow.getElementById("addName"),
-      addAc: shadow.getElementById("addAc"),
-      addSpeed: shadow.getElementById("addSpeed"),
-      addHpCur: shadow.getElementById("addHpCur"),
-      addHpMax: shadow.getElementById("addHpMax"),
-      addType: shadow.getElementById("addType"),
-      initiativeList: shadow.getElementById("initiativeList"),
-      encounterList: shadow.getElementById("encounterList"),
-      libNameInput: shadow.getElementById("libNameInput"),
-      libTagsInput: shadow.getElementById("libTagsInput"),
-      libLocationInput: shadow.getElementById("libLocationInput"),
-      tabActive: shadow.getElementById("tabActive"),
-      tabLibrary: shadow.getElementById("tabLibrary"),
-      activeTabContent: shadow.getElementById("activeTabContent"),
-      libraryTabContent: shadow.getElementById("libraryTabContent")
-    };
-
-    let currentTab = "active";
-
-    function persist() {
-      saveState(state);
+      ${renderEditorModal()}
+      `;
     }
 
-    function renderRoundAndTurn() {
-      ensureTurnId(state);
-      refs.roundInput.value = String(state.round);
-      const current = getCurrentTurn(state);
-      refs.currentTurnInput.value = current ? current.name : "—";
-    }
-
-    function renderAddSectionState() {
-      const open = !!state.ui.addSectionOpen;
-      refs.addEditSection.classList.toggle("collapsed", !open);
-      refs.addSectionChevron.textContent = open ? "▾" : "▸";
-    }
-
-    function renderParty() {
-      refs.partyPresetMeta.textContent = `${state.savedParty.name} (${state.savedParty.members.length})`;
-      refs.partyNameInput.value = state.savedParty.name;
-
-      const chips = state.savedParty.members
-        .map((member, idx) => {
-          return `<div class="party-chip" title="AC ${member.ac} · HP ${member.hpCurrent}/${member.hpMax}">${escapeHtml(member.name)} <button data-action="add-party-member" data-party-index="${idx}" title="Add to encounter" type="button">+</button></div>`;
-        })
-        .join("");
-
-      refs.partyChipRow.innerHTML = chips || `<span class="hint-text">No members yet. Open Manage party preset to add some.</span>`;
-    }
-
-    function renderPartyEditor() {
-      refs.partyEditor.classList.toggle("hidden", !state.ui.partyEditorOpen);
-
-      if (!state.savedParty.members.length) {
-        refs.partyEditorList.innerHTML = `<div class="initiative-empty">No preset members. Click <strong>+ Add member</strong> to create one.</div>`;
-        return;
-      }
-
-      refs.partyEditorList.innerHTML = state.savedParty.members
-        .map((member, idx) => {
-          return `
-            <div class="party-member-row" data-party-index="${idx}">
-              <div class="field">
-                <label>Name</label>
-                <input data-party-field="name" type="text" value="${escapeHtml(member.name)}" />
-              </div>
-              <div class="field">
-                <label>Type</label>
-                <select data-party-field="type">
-                  <option ${normalizeType(member.type) === "PC" ? "selected" : ""}>PC</option>
-                  <option ${normalizeType(member.type) === "NPC" ? "selected" : ""}>NPC</option>
-                  <option ${normalizeType(member.type) === "Enemy" ? "selected" : ""}>Enemy</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>AC</label>
-                <input data-party-field="ac" type="number" min="0" value="${member.ac}" />
-              </div>
-              <div class="field">
-                <label>Spd</label>
-                <input data-party-field="speed" type="number" min="0" value="${member.speed}" />
-              </div>
-              <div class="field">
-                <label>HP Cur</label>
-                <input data-party-field="hpCurrent" type="number" min="0" value="${member.hpCurrent}" />
-              </div>
-              <div class="field">
-                <label>HP Max</label>
-                <input data-party-field="hpMax" type="number" min="0" value="${member.hpMax}" />
-              </div>
-              <button class="party-remove" data-action="party-remove-member" data-party-index="${idx}" type="button" title="Remove member">×</button>
-            </div>
-          `;
-        })
-        .join("");
-    }
-
-    function renderCards() {
-      ensureTurnId(state);
-
-      if (!state.activeEncounter.length) {
-        refs.initiativeList.innerHTML = `<div class="initiative-empty">No combatants yet. Add one above or load an encounter from the library.</div>`;
-        renderRoundAndTurn();
-        return;
-      }
-
-      refs.initiativeList.innerHTML = state.activeEncounter
-        .map((c) => {
-          const isActive = c.id === state.turnId;
-          const downed = c.hpCurrent <= 0;
-
-          return `
-            <div class="card ${typeClass(c.type)} ${isActive ? "active-turn" : ""} ${downed ? "downed" : ""}" draggable="true" data-id="${escapeHtml(c.id)}">
-              <div class="card-main">
-                <div class="card-portrait" title="Portrait">${escapeHtml(c.portrait || toPortrait(c.name))}</div>
-                <div class="card-content">
-                  <div class="name-block">
-                    <div class="name-row">
-                      <span class="card-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
-                      <span class="card-tag">${escapeHtml(normalizeType(c.type))}</span>
-                    </div>
-                  </div>
-
-                  <div class="hp-block">
-                    <span class="hp-label">HP:
-                      <input class="hp-inline" data-field="hpCurrent" type="number" min="0" value="${c.hpCurrent}" />
-                      <span class="hp-divider">/</span>
-                      <input class="hp-inline" data-field="hpMax" type="number" min="0" value="${c.hpMax}" />
-                    </span>
-                    <input class="hp-amount-input" data-role="hp-amount" type="number" min="1" placeholder="1" />
-                    <div class="hp-buttons">
-                      <button class="btn btn-xs" data-action="damage" type="button">Damage</button>
-                      <button class="btn btn-secondary btn-xs" data-action="heal" type="button">Heal</button>
-                    </div>
-                  </div>
-
-                  <div class="card-meta">
-                    <div class="card-meta-top">
-                      <span>AC: <input class="meta-inline" data-field="ac" type="number" min="0" value="${c.ac}" /></span>
-                      <span>Spd: <input class="meta-inline" data-field="speed" type="number" min="0" value="${c.speed}" /> ft</span>
-                      <button class="btn-icon" data-action="remove-combatant" title="Remove" type="button">×</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          `;
-        })
-        .join("");
-
-      renderRoundAndTurn();
-      wireDragAndDrop();
-    }
-
-    function renderLibraryDraftDefaults() {
-      if (!refs.libNameInput.value.trim()) refs.libNameInput.value = `Encounter ${state.library.length + 1}`;
-    }
-
-    function renderLibrary() {
-      if (!state.library.length) {
-        refs.encounterList.innerHTML = `<div class="initiative-empty">No saved encounters yet. Use <strong>Save active as encounter</strong> or <strong>Create blank</strong> above.</div>`;
-        return;
-      }
-
-      refs.encounterList.innerHTML = state.library
-        .map((entry) => {
-          const count = Array.isArray(entry.combatants) ? entry.combatants.length : 0;
-          return `
-            <div class="encounter-row" data-encounter-id="${escapeHtml(entry.id)}">
-              <div class="encounter-row-header">
-                <div>
-                  <div class="encounter-name">${escapeHtml(entry.name)}</div>
-                  <div class="encounter-tags">${escapeHtml(entry.tags || "No tags")} · ${count} combatant${count === 1 ? "" : "s"}</div>
-                </div>
-                <span class="hint-text">${escapeHtml(entry.location || "—")}</span>
-              </div>
-              <div class="encounter-actions">
-                <button class="btn btn-xs" data-action="load-encounter" type="button">Load as active</button>
-                <button class="btn btn-secondary btn-xs" data-action="append-encounter" type="button">Append to active</button>
-                <button class="btn btn-secondary btn-xs" data-action="edit-encounter" type="button">Edit</button>
-                <button class="btn btn-secondary btn-xs" data-action="duplicate-encounter" type="button">Duplicate</button>
-                <button class="btn btn-secondary btn-xs" data-action="delete-encounter" type="button">Delete</button>
-              </div>
-            </div>
-          `;
-        })
-        .join("");
-    }
-
-    function setTab(tabName) {
-      currentTab = tabName === "library" ? "library" : "active";
-      const active = currentTab === "active";
-
-      refs.tabActive.classList.toggle("active", active);
-      refs.tabLibrary.classList.toggle("active", !active);
-
-      refs.activeTabContent.classList.toggle("hidden", !active);
-      refs.libraryTabContent.classList.toggle("hidden", active);
-    }
-
-    function addCombatantFromInputs() {
-      let hpMax = Math.max(0, asInt(refs.addHpMax.value, 1));
-      let hpCurrent = Math.max(0, asInt(refs.addHpCur.value, hpMax));
-      if (hpCurrent > hpMax) hpCurrent = hpMax;
-
-      const type = normalizeType(refs.addType.value);
-      const name = (refs.addName.value || "").trim() || defaultNameForType(type, state);
-
-      const combatant = normalizeCombatant(
-        {
-          id: nextId(state, "c"),
-          name,
-          type,
-          ac: Math.max(0, asInt(refs.addAc.value, 10)),
-          speed: Math.max(0, asInt(refs.addSpeed.value, 30)),
-          hpCurrent,
-          hpMax
-        },
-        state
-      );
-
-      state.activeEncounter.push(combatant);
-      ensureTurnId(state);
-      persist();
-      renderCards();
-
-      refs.addName.value = "";
-    }
-
-    function addPartyMember(index) {
-      const member = state.savedParty.members[index];
-      if (!member) return;
-      state.activeEncounter.push(copyPartyMemberToCombatant(member, state));
-      ensureTurnId(state);
-      persist();
-      renderCards();
-    }
-
-    function addFullParty() {
-      state.savedParty.members.forEach((member) => {
-        state.activeEncounter.push(copyPartyMemberToCombatant(member, state));
-      });
-      ensureTurnId(state);
-      persist();
-      renderCards();
-    }
-
-    function addPartyPresetMember() {
-      const index = state.savedParty.members.length + 1;
-      const name = `Member ${index}`;
-      state.savedParty.members.push({
-        name,
-        type: "PC",
-        ac: 15,
-        speed: 30,
-        hpCurrent: 20,
-        hpMax: 20,
-        portrait: toPortrait(name)
-      });
-      persist();
-      renderParty();
-      renderPartyEditor();
-    }
-
-    function removePartyPresetMember(index) {
-      if (index < 0 || index >= state.savedParty.members.length) return;
-      state.savedParty.members.splice(index, 1);
-      persist();
-      renderParty();
-      renderPartyEditor();
-    }
-
-    function updatePartyPresetField(index, field, rawValue) {
-      const member = state.savedParty.members[index];
-      if (!member) return;
-
-      if (field === "name") {
-        const newName = String(rawValue || "").trim() || member.name || `Member ${index + 1}`;
-        member.name = newName;
-        member.portrait = toPortrait(newName, member.portrait);
-      } else if (field === "type") {
-        member.type = normalizeType(rawValue);
-      } else if (field === "ac") {
-        member.ac = Math.max(0, asInt(rawValue, member.ac));
-      } else if (field === "speed") {
-        member.speed = Math.max(0, asInt(rawValue, member.speed));
-      } else if (field === "hpCurrent") {
-        member.hpCurrent = Math.max(0, asInt(rawValue, member.hpCurrent));
-        if (member.hpCurrent > member.hpMax) member.hpCurrent = member.hpMax;
-      } else if (field === "hpMax") {
-        member.hpMax = Math.max(0, asInt(rawValue, member.hpMax));
-        if (member.hpCurrent > member.hpMax) member.hpCurrent = member.hpMax;
-      }
-
-      persist();
-      renderParty();
-      renderPartyEditor();
-    }
-
-    function stepTurn() {
-      if (!state.activeEncounter.length) return;
-      ensureTurnId(state);
-
-      const idx = getCurrentTurnIndex(state);
-      const nextIdx = idx < 0 ? 0 : (idx + 1) % state.activeEncounter.length;
-      if (idx >= 0 && nextIdx === 0) state.round += 1;
-      state.turnId = state.activeEncounter[nextIdx].id;
-
-      persist();
-      renderCards();
-    }
-
-    function stepRound() {
-      state.round += 1;
-      if (state.activeEncounter.length) state.turnId = state.activeEncounter[0].id;
-      persist();
-      renderCards();
-    }
-
-    function updateCardField(cardId, field, value) {
-      const combatant = state.activeEncounter.find((c) => c.id === cardId);
-      if (!combatant) return;
-
-      if (field === "hpCurrent") {
-        combatant.hpCurrent = Math.max(0, asInt(value, combatant.hpCurrent));
-        if (combatant.hpCurrent > combatant.hpMax) combatant.hpCurrent = combatant.hpMax;
-      } else if (field === "hpMax") {
-        combatant.hpMax = Math.max(0, asInt(value, combatant.hpMax));
-        if (combatant.hpCurrent > combatant.hpMax) combatant.hpCurrent = combatant.hpMax;
-      } else if (field === "ac") {
-        combatant.ac = Math.max(0, asInt(value, combatant.ac));
-      } else if (field === "speed") {
-        combatant.speed = Math.max(0, asInt(value, combatant.speed));
-      }
-
-      persist();
-      renderCards();
-    }
-
-    function applyDamageOrHeal(cardEl, mode) {
-      const cardId = cardEl.dataset.id;
-      const combatant = state.activeEncounter.find((c) => c.id === cardId);
-      if (!combatant) return;
-
-      const amountInput = cardEl.querySelector('[data-role="hp-amount"]');
-      const amountRaw = amountInput ? amountInput.value : "";
-      const amount = Math.max(1, asInt(amountRaw, 1));
-
-      if (mode === "damage") {
-        combatant.hpCurrent = Math.max(0, combatant.hpCurrent - amount);
-      } else {
-        combatant.hpCurrent = Math.min(combatant.hpMax, combatant.hpCurrent + amount);
-      }
-
-      if (amountInput) amountInput.value = "";
-
-      persist();
-      renderCards();
-    }
-
-    function removeCombatant(cardId) {
-      const idx = state.activeEncounter.findIndex((c) => c.id === cardId);
-      if (idx < 0) return;
-
-      const removedWasTurn = state.turnId === cardId;
-      state.activeEncounter.splice(idx, 1);
-
-      if (!state.activeEncounter.length) {
-        state.turnId = null;
-      } else if (removedWasTurn) {
-        const nextIdx = Math.min(idx, state.activeEncounter.length - 1);
-        state.turnId = state.activeEncounter[nextIdx].id;
-      }
-
-      persist();
-      renderCards();
-    }
-
-    function toLibraryCombatant(combatant) {
-      let hpMax = Math.max(0, asInt(combatant.hpMax, 1));
-      let hpCurrent = Math.max(0, asInt(combatant.hpCurrent, hpMax));
-      if (hpCurrent > hpMax) hpCurrent = hpMax;
-
-      return {
-        name: String(combatant.name || "Combatant").trim() || "Combatant",
-        type: normalizeType(combatant.type),
-        ac: Math.max(0, asInt(combatant.ac, 10)),
-        speed: Math.max(0, asInt(combatant.speed, 30)),
-        hpCurrent,
-        hpMax,
-        portrait: toPortrait(combatant.name, combatant.portrait)
-      };
-    }
-
-    function cloneEncounterCombatants(combatants) {
-      return (combatants || []).map((c) =>
-        normalizeCombatant(
-          {
-            id: nextId(state, "c"),
-            name: c.name,
-            type: c.type,
-            ac: c.ac,
-            speed: c.speed,
-            hpCurrent: c.hpCurrent,
-            hpMax: c.hpMax,
-            portrait: c.portrait
-          },
-          state
-        )
-      );
-    }
-
-    function createEncounterFromActive() {
-      const name = (refs.libNameInput.value || "").trim() || `Encounter ${state.library.length + 1}`;
-      const tags = (refs.libTagsInput.value || "").trim();
-      const location = (refs.libLocationInput.value || "").trim();
-
-      const combatants = state.activeEncounter.map((c) => toLibraryCombatant(c));
-
-      state.library.unshift({
-        id: nextId(state, "e"),
-        name,
-        tags,
-        location,
-        combatants
-      });
-
-      persist();
-      renderLibrary();
-      refs.libNameInput.value = `${name} Copy`;
-    }
-
-    function createBlankEncounter() {
-      const name = (refs.libNameInput.value || "").trim() || `Encounter ${state.library.length + 1}`;
-      const tags = (refs.libTagsInput.value || "").trim();
-      const location = (refs.libLocationInput.value || "").trim();
-
-      state.library.unshift({
-        id: nextId(state, "e"),
-        name,
-        tags,
-        location,
-        combatants: []
-      });
-
-      persist();
-      renderLibrary();
-      refs.libNameInput.value = `${name} Variant`;
-    }
-
-    function loadEncounter(encounterId, appendMode) {
-      const entry = state.library.find((e) => e.id === encounterId);
-      if (!entry) return;
-
-      const clones = cloneEncounterCombatants(entry.combatants);
-      if (appendMode) {
-        state.activeEncounter.push(...clones);
-      } else {
-        state.activeEncounter = clones;
-        state.round = 1;
-      }
-
-      ensureTurnId(state);
-      if (!appendMode) {
-        state.turnId = state.activeEncounter.length ? state.activeEncounter[0].id : null;
-      }
-
-      persist();
-      renderCards();
-      setTab("active");
-    }
-
-    function editEncounter(encounterId) {
-      const entry = state.library.find((e) => e.id === encounterId);
-      if (!entry) return;
-
-      const name = window.prompt("Encounter name:", entry.name);
-      if (name === null) return;
-      const tags = window.prompt("Encounter tags:", entry.tags || "");
-      if (tags === null) return;
-      const location = window.prompt("Encounter location:", entry.location || "");
-      if (location === null) return;
-
-      entry.name = name.trim() || entry.name;
-      entry.tags = tags.trim();
-      entry.location = location.trim();
-
-      persist();
-      renderLibrary();
-    }
-
-    function duplicateEncounter(encounterId) {
-      const entry = state.library.find((e) => e.id === encounterId);
-      if (!entry) return;
-
-      state.library.unshift({
-        id: nextId(state, "e"),
-        name: `${entry.name} (Copy)`,
-        tags: entry.tags,
-        location: entry.location,
-        combatants: deepClone(entry.combatants)
-      });
-
-      persist();
-      renderLibrary();
-    }
-
-    function deleteEncounter(encounterId) {
-      const idx = state.library.findIndex((e) => e.id === encounterId);
-      if (idx < 0) return;
-      state.library.splice(idx, 1);
-      persist();
-      renderLibrary();
-    }
-
-    function reorderFromDom() {
-      const ids = Array.from(refs.initiativeList.querySelectorAll(".card")).map((el) =>
-        el.dataset.id
-      );
-      if (!ids.length) return;
-
-      const map = new Map(state.activeEncounter.map((c) => [c.id, c]));
-      state.activeEncounter = ids.map((id) => map.get(id)).filter(Boolean);
-      ensureTurnId(state);
-      persist();
-      renderCards();
-    }
-
-    function wireDragAndDrop() {
-      const list = refs.initiativeList;
-      const cards = Array.from(list.querySelectorAll(".card"));
-      if (!cards.length) return;
-
-      cards.forEach((card) => {
-        card.addEventListener("dragstart", (event) => {
-          card.classList.add("dragging");
-          if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", card.dataset.id || "");
-          }
-        });
-
-        card.addEventListener("dragend", () => {
-          card.classList.remove("dragging");
-          reorderFromDom();
+    function bindGeneralEvents() {
+      // tabs
+      shadow.querySelectorAll("[data-tab]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.tab = btn.getAttribute("data-tab") === "library" ? "library" : "active";
+          persistAndRender();
         });
       });
 
-      list.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        const dragging = list.querySelector(".card.dragging");
-        if (!dragging) return;
+      // active name & round
+      const activeNameInput = shadow.getElementById("activeEncounterName");
+      if (activeNameInput) {
+        activeNameInput.addEventListener("input", () => {
+          state.activeEncounterName = activeNameInput.value;
+          saveState(state);
+        });
+      }
 
-        const nonDragging = Array.from(list.querySelectorAll(".card:not(.dragging)"));
-        let next = null;
+      const roundInput = shadow.getElementById("roundInput");
+      if (roundInput) {
+        roundInput.addEventListener("input", () => {
+          state.round = Math.max(1, intOr(roundInput.value, state.round));
+          saveState(state);
+        });
+      }
 
-        for (const card of nonDragging) {
-          const rect = card.getBoundingClientRect();
-          const offset = event.clientY - (rect.top + rect.height / 2);
-          if (offset < 0) {
-            next = card;
-            break;
+      const nextTurnBtn = shadow.getElementById("nextTurnBtn");
+      if (nextTurnBtn) {
+        nextTurnBtn.addEventListener("click", () => {
+          if (!state.activeCombatants.length) return;
+          state.turnIndex = (state.turnIndex + 1) % state.activeCombatants.length;
+          if (state.turnIndex === 0) state.round += 1;
+          persistAndRender();
+        });
+      }
+
+      const nextRoundBtn = shadow.getElementById("nextRoundBtn");
+      if (nextRoundBtn) {
+        nextRoundBtn.addEventListener("click", () => {
+          state.round += 1;
+          state.turnIndex = 0;
+          persistAndRender();
+        });
+      }
+
+      const toggleAddSectionBtn = shadow.getElementById("toggleAddSectionBtn");
+      if (toggleAddSectionBtn) {
+        toggleAddSectionBtn.addEventListener("click", () => {
+          state.addExpanded = !state.addExpanded;
+          persistAndRender();
+        });
+      }
+
+      const togglePartyManagerBtn = shadow.getElementById("togglePartyManagerBtn");
+      if (togglePartyManagerBtn) {
+        togglePartyManagerBtn.addEventListener("click", () => {
+          state.partyManagerOpen = !state.partyManagerOpen;
+          persistAndRender();
+        });
+      }
+
+      // add combatant draft sync
+      const addInputs = [
+        ["addName", "name"],
+        ["addAC", "ac"],
+        ["addSpeed", "speed"],
+        ["addHpCur", "hpCurrent"],
+        ["addHpMax", "hpMax"],
+        ["addType", "type"]
+      ];
+      addInputs.forEach(([id, key]) => {
+        const el = shadow.getElementById(id);
+        if (!el) return;
+        el.addEventListener("input", () => {
+          if (key === "name" || key === "type") {
+            state.addDraft[key] = el.value;
+          } else {
+            state.addDraft[key] = Math.max(0, intOr(el.value, state.addDraft[key]));
           }
-        }
-
-        if (next) {
-          list.insertBefore(dragging, next);
-        } else {
-          list.appendChild(dragging);
-        }
+          saveState(state);
+        });
       });
+
+      const addCombatantBtn = shadow.getElementById("addCombatantBtn");
+      const addNameEl = shadow.getElementById("addName");
+      if (addCombatantBtn) {
+        addCombatantBtn.addEventListener("click", () => {
+          const hpMax = Math.max(0, intOr(state.addDraft.hpMax, 10));
+          const hpCur = clamp(intOr(state.addDraft.hpCurrent, hpMax), 0, hpMax);
+          const c = mkCombatant({
+            name: state.addDraft.name || "New Combatant",
+            type: state.addDraft.type || "NPC",
+            ac: state.addDraft.ac,
+            speed: state.addDraft.speed,
+            hpCurrent: hpCur,
+            hpMax
+          });
+          state.activeCombatants.push(c);
+          ensureTurnIndex();
+          state.addDraft.name = "";
+          persistAndRender();
+        });
+      }
+      if (addNameEl) {
+        addNameEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addCombatantBtn?.click();
+          }
+        });
+      }
+
+      // party quick-add / full add
+      const party = getSelectedParty();
+      if (party) {
+        shadow.querySelectorAll("[data-party-add-one]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const memberId = btn.getAttribute("data-party-add-one");
+            const member = party.members.find((m) => m.id === memberId);
+            if (!member) return;
+            state.activeCombatants.push(cloneCombatant(member, true));
+            ensureTurnIndex();
+            persistAndRender();
+          });
+        });
+
+        const addFullPartyBtn = shadow.getElementById("addFullPartyBtn");
+        if (addFullPartyBtn) {
+          addFullPartyBtn.addEventListener("click", () => {
+            party.members.forEach((m) => state.activeCombatants.push(cloneCombatant(m, true)));
+            ensureTurnIndex();
+            persistAndRender();
+          });
+        }
+      }
+
+      // party manager controls
+      const partyNameInput = shadow.getElementById("partyNameInput");
+      if (partyNameInput && party) {
+        partyNameInput.addEventListener("input", () => {
+          party.name = partyNameInput.value || "Party";
+          saveState(state);
+        });
+      }
+
+      const partyAddMemberBtn = shadow.getElementById("partyAddMemberBtn");
+      if (partyAddMemberBtn && party) {
+        partyAddMemberBtn.addEventListener("click", () => {
+          party.members.push(
+            mkCombatant({
+              id: uid("m"),
+              name: "New Member",
+              type: "PC",
+              ac: 10,
+              speed: 30,
+              hpCurrent: 10,
+              hpMax: 10
+            })
+          );
+          persistAndRender();
+        });
+      }
+
+      shadow.querySelectorAll("[data-party-field]").forEach((el) => {
+        el.addEventListener("input", () => {
+          const memberId = el.getAttribute("data-member-id");
+          const field = el.getAttribute("data-party-field");
+          const p = getSelectedParty();
+          if (!p) return;
+          const m = p.members.find((x) => x.id === memberId);
+          if (!m) return;
+          if (field === "name" || field === "type") {
+            m[field] = el.value;
+          } else {
+            m[field] = Math.max(0, intOr(el.value, m[field]));
+            if (field === "hpMax") {
+              m.hpCurrent = clamp(m.hpCurrent, 0, m.hpMax);
+            }
+            if (field === "hpCurrent") {
+              m.hpCurrent = clamp(m.hpCurrent, 0, m.hpMax);
+            }
+          }
+          saveState(state);
+        });
+      });
+
+      shadow.querySelectorAll("[data-party-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const memberId = btn.getAttribute("data-party-remove");
+          const p = getSelectedParty();
+          if (!p) return;
+          p.members = p.members.filter((m) => m.id !== memberId);
+          persistAndRender();
+        });
+      });
+
+      // card edits
+      shadow.querySelectorAll("[data-card-field]").forEach((el) => {
+        el.addEventListener("input", () => {
+          const id = el.getAttribute("data-card-id");
+          const field = el.getAttribute("data-card-field");
+          const c = state.activeCombatants.find((x) => x.id === id);
+          if (!c) return;
+          if (field === "name" || field === "type") {
+            c[field] = el.value;
+          } else {
+            c[field] = Math.max(0, intOr(el.value, c[field]));
+            if (field === "hpMax") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
+            if (field === "hpCurrent") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
+          }
+          saveState(state);
+        });
+      });
+
+      shadow.querySelectorAll("[data-remove-card]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-remove-card");
+          const idx = state.activeCombatants.findIndex((c) => c.id === id);
+          if (idx < 0) return;
+          state.activeCombatants.splice(idx, 1);
+          if (state.turnIndex >= idx) state.turnIndex = Math.max(0, state.turnIndex - 1);
+          ensureTurnIndex();
+          persistAndRender();
+        });
+      });
+
+      shadow.querySelectorAll("[data-dmg]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-dmg");
+          const c = state.activeCombatants.find((x) => x.id === id);
+          if (!c) return;
+          const amountEl = shadow.querySelector(`[data-amount-for="${id}"]`);
+          const amount = Math.max(1, intOr(amountEl?.value, 1));
+          c.hpCurrent = clamp(c.hpCurrent - amount, 0, c.hpMax);
+          persistAndRender();
+        });
+      });
+
+      shadow.querySelectorAll("[data-heal]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-heal");
+          const c = state.activeCombatants.find((x) => x.id === id);
+          if (!c) return;
+          const amountEl = shadow.querySelector(`[data-amount-for="${id}"]`);
+          const amount = Math.max(1, intOr(amountEl?.value, 1));
+          c.hpCurrent = clamp(c.hpCurrent + amount, 0, c.hpMax);
+          persistAndRender();
+        });
+      });
+
+      // drag and drop active list
+      const initiativeList = shadow.getElementById("initiativeList");
+      if (initiativeList) {
+        const cards = Array.from(initiativeList.querySelectorAll("[data-card-id]"));
+        cards.forEach((card) => {
+          const id = card.getAttribute("data-card-id");
+          card.addEventListener("dragstart", (e) => {
+            dragActiveId = id;
+            card.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", id || "");
+          });
+          card.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+          });
+          card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          });
+          card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            const targetId = card.getAttribute("data-card-id");
+            if (!dragActiveId || !targetId) return;
+            state.activeCombatants = moveItem(state.activeCombatants, dragActiveId, targetId);
+            state.turnIndex = clamp(state.turnIndex, 0, Math.max(0, state.activeCombatants.length - 1));
+            dragActiveId = null;
+            persistAndRender();
+          });
+        });
+
+        initiativeList.addEventListener("dragover", (e) => {
+          e.preventDefault();
+        });
+
+        initiativeList.addEventListener("drop", (e) => {
+          const targetCard = e.target.closest("[data-card-id]");
+          if (targetCard || !dragActiveId) return;
+          state.activeCombatants = moveToEnd(state.activeCombatants, dragActiveId);
+          dragActiveId = null;
+          persistAndRender();
+        });
+      }
+
+      // library creation and actions
+      const createName = shadow.getElementById("createName");
+      const createTags = shadow.getElementById("createTags");
+      const createLocation = shadow.getElementById("createLocation");
+      if (createName) {
+        createName.addEventListener("input", () => {
+          state.createName = createName.value;
+          saveState(state);
+        });
+      }
+      if (createTags) {
+        createTags.addEventListener("input", () => {
+          state.createTags = createTags.value;
+          saveState(state);
+        });
+      }
+      if (createLocation) {
+        createLocation.addEventListener("input", () => {
+          state.createLocation = createLocation.value;
+          saveState(state);
+        });
+      }
+
+      const createFromActiveBtn = shadow.getElementById("createFromActiveBtn");
+      if (createFromActiveBtn) {
+        createFromActiveBtn.addEventListener("click", () => {
+          const e = serializeActiveAsEncounter();
+          e.name = (state.createName || state.activeEncounterName || "New Encounter").trim() || "New Encounter";
+          e.tags = (state.createTags || "").trim();
+          e.location = (state.createLocation || "").trim();
+          state.library.unshift(e);
+          state.activeLibraryId = e.id;
+          state.createName = "";
+          state.createTags = "";
+          state.createLocation = "";
+          persistAndRender();
+        });
+      }
+
+      const createBlankAndEditBtn = shadow.getElementById("createBlankAndEditBtn");
+      if (createBlankAndEditBtn) {
+        createBlankAndEditBtn.addEventListener("click", () => {
+          const blank = {
+            id: uid("enc"),
+            name: (state.createName || "Untitled Encounter").trim() || "Untitled Encounter",
+            tags: (state.createTags || "").trim(),
+            location: (state.createLocation || "").trim(),
+            combatants: []
+          };
+          state.library.unshift(blank);
+          state.createName = "";
+          state.createTags = "";
+          state.createLocation = "";
+          openEditor(blank);
+        });
+      }
+
+      const returnActiveBtn = shadow.getElementById("returnActiveBtn");
+      if (returnActiveBtn) {
+        returnActiveBtn.addEventListener("click", () => {
+          if (state.activeLibraryId) {
+            const target = state.library.find((e) => e.id === state.activeLibraryId);
+            if (target) {
+              target.combatants = state.activeCombatants.map((c) => cloneCombatant(c, true));
+              if (!target.name) target.name = state.activeEncounterName || "Current Encounter";
+            }
+          } else {
+            const created = serializeActiveAsEncounter();
+            created.name = state.activeEncounterName || "Current Encounter";
+            state.library.unshift(created);
+            state.activeLibraryId = created.id;
+          }
+          persistAndRender();
+        });
+      }
+
+      const openNewEditorBtn = shadow.getElementById("openNewEditorBtn");
+      if (openNewEditorBtn) {
+        openNewEditorBtn.addEventListener("click", () => {
+          openEditor({ id: null, name: "", tags: "", location: "", combatants: [] });
+        });
+      }
+
+      shadow.querySelectorAll("[data-make-active]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-make-active");
+          const enc = state.library.find((e) => e.id === id);
+          if (!enc) return;
+          state.activeLibraryId = enc.id;
+          state.activeEncounterName = enc.name || "Current Encounter";
+          state.activeCombatants = enc.combatants.map((c) => cloneCombatant(c, true));
+          state.turnIndex = 0;
+          state.round = 1;
+          state.tab = "active";
+          persistAndRender();
+        });
+      });
+
+      shadow.querySelectorAll("[data-return-active]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-return-active");
+          const enc = state.library.find((e) => e.id === id);
+          if (!enc) return;
+          enc.combatants = state.activeCombatants.map((c) => cloneCombatant(c, true));
+          if (!enc.name) enc.name = state.activeEncounterName || "Current Encounter";
+          persistAndRender();
+        });
+      });
+
+      shadow.querySelectorAll("[data-edit-library]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-edit-library");
+          const enc = state.library.find((e) => e.id === id);
+          if (!enc) return;
+          openEditor(enc);
+        });
+      });
+
+      shadow.querySelectorAll("[data-delete-library]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-delete-library");
+          state.library = state.library.filter((e) => e.id !== id);
+          if (state.activeLibraryId === id) state.activeLibraryId = null;
+          persistAndRender();
+        });
+      });
+
+      // editor modal controls
+      bindEditorEvents();
     }
 
-    shadow.addEventListener("click", (event) => {
-      const btn = event.target.closest("[data-action]");
-      if (!btn) return;
+    function bindEditorEvents() {
+      if (!state.editorOpen) return;
 
-      const action = btn.getAttribute("data-action");
-      const card = btn.closest(".card");
-      const encounterRow = btn.closest(".encounter-row");
-      const encounterId = encounterRow ? encounterRow.dataset.encounterId : null;
+      const closeButtons = [
+        shadow.getElementById("editorOverlay"),
+        shadow.getElementById("editorCloseTopBtn"),
+        shadow.getElementById("editorCancelBtn")
+      ];
+      closeButtons.forEach((el) => {
+        if (!el) return;
+        el.addEventListener("click", () => closeEditor());
+      });
 
-      if (action === "tab-active") {
-        setTab("active");
-        return;
+      const editorFieldMap = [
+        ["editorName", "name"],
+        ["editorTags", "tags"],
+        ["editorLocation", "location"]
+      ];
+
+      editorFieldMap.forEach(([id, key]) => {
+        const el = shadow.getElementById(id);
+        if (!el) return;
+        el.addEventListener("input", () => {
+          state.editor[key] = el.value;
+          saveState(state);
+        });
+      });
+
+      const addDraftMap = [
+        ["editorAddName", "name"],
+        ["editorAddType", "type"],
+        ["editorAddAC", "ac"],
+        ["editorAddSpeed", "speed"],
+        ["editorAddHpCur", "hpCurrent"],
+        ["editorAddHpMax", "hpMax"]
+      ];
+      addDraftMap.forEach(([id, key]) => {
+        const el = shadow.getElementById(id);
+        if (!el) return;
+        el.addEventListener("input", () => {
+          if (key === "name" || key === "type") {
+            state.editor.addDraft[key] = el.value;
+          } else {
+            state.editor.addDraft[key] = Math.max(0, intOr(el.value, state.editor.addDraft[key]));
+          }
+          saveState(state);
+        });
+      });
+
+      const editorAddCombatantBtn = shadow.getElementById("editorAddCombatantBtn");
+      if (editorAddCombatantBtn) {
+        editorAddCombatantBtn.addEventListener("click", () => {
+          const hpMax = Math.max(0, intOr(state.editor.addDraft.hpMax, 10));
+          const hpCur = clamp(intOr(state.editor.addDraft.hpCurrent, hpMax), 0, hpMax);
+          state.editor.combatants.push(
+            mkCombatant({
+              name: state.editor.addDraft.name || "New Combatant",
+              type: state.editor.addDraft.type || "Enemy",
+              ac: state.editor.addDraft.ac,
+              speed: state.editor.addDraft.speed,
+              hpCurrent: hpCur,
+              hpMax
+            })
+          );
+          state.editor.addDraft.name = "";
+          persistAndRender();
+        });
       }
 
-      if (action === "tab-library") {
-        setTab("library");
-        return;
+      const editorAddName = shadow.getElementById("editorAddName");
+      if (editorAddName) {
+        editorAddName.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            editorAddCombatantBtn?.click();
+          }
+        });
       }
 
-      if (action === "toggle-add-section") {
-        state.ui.addSectionOpen = !state.ui.addSectionOpen;
-        persist();
-        renderAddSectionState();
-        return;
-      }
+      const party = getSelectedParty();
+      if (party) {
+        shadow.querySelectorAll("[data-editor-add-party-one]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const memberId = btn.getAttribute("data-editor-add-party-one");
+            const member = party.members.find((m) => m.id === memberId);
+            if (!member) return;
+            state.editor.combatants.push(cloneCombatant(member, true));
+            persistAndRender();
+          });
+        });
 
-      if (action === "toggle-party-editor") {
-        state.ui.partyEditorOpen = !state.ui.partyEditorOpen;
-        persist();
-        renderPartyEditor();
-        return;
-      }
-
-      if (action === "next-turn") {
-        stepTurn();
-        return;
-      }
-
-      if (action === "next-round") {
-        stepRound();
-        return;
-      }
-
-      if (action === "add-combatant") {
-        addCombatantFromInputs();
-        return;
-      }
-
-      if (action === "add-party-member") {
-        const idx = asInt(btn.getAttribute("data-party-index"), -1);
-        if (idx >= 0) addPartyMember(idx);
-        return;
-      }
-
-      if (action === "add-full-party") {
-        addFullParty();
-        return;
-      }
-
-      if (action === "party-add-member") {
-        addPartyPresetMember();
-        return;
-      }
-
-      if (action === "party-remove-member") {
-        const idx = asInt(btn.getAttribute("data-party-index"), -1);
-        removePartyPresetMember(idx);
-        return;
-      }
-
-      if (action === "damage" && card) {
-        applyDamageOrHeal(card, "damage");
-        return;
-      }
-
-      if (action === "heal" && card) {
-        applyDamageOrHeal(card, "heal");
-        return;
-      }
-
-      if (action === "remove-combatant" && card) {
-        removeCombatant(card.dataset.id);
-        return;
-      }
-
-      if (action === "create-from-active") {
-        createEncounterFromActive();
-        return;
-      }
-
-      if (action === "create-blank-encounter") {
-        createBlankEncounter();
-        return;
-      }
-
-      if (action === "load-encounter" && encounterId) {
-        loadEncounter(encounterId, false);
-        return;
-      }
-
-      if (action === "append-encounter" && encounterId) {
-        loadEncounter(encounterId, true);
-        return;
-      }
-
-      if (action === "edit-encounter" && encounterId) {
-        editEncounter(encounterId);
-        return;
-      }
-
-      if (action === "duplicate-encounter" && encounterId) {
-        duplicateEncounter(encounterId);
-        return;
-      }
-
-      if (action === "delete-encounter" && encounterId) {
-        deleteEncounter(encounterId);
-      }
-    });
-
-    shadow.addEventListener("change", (event) => {
-      const target = event.target;
-
-      if (target === refs.roundInput) {
-        state.round = Math.max(1, asInt(target.value, state.round));
-        persist();
-        renderRoundAndTurn();
-        return;
-      }
-
-      if (target === refs.addType) {
-        const t = normalizeType(refs.addType.value);
-        refs.addType.value = t;
-        return;
-      }
-
-      if (target === refs.partyNameInput) {
-        const name = String(target.value || "").trim();
-        state.savedParty.name = name || "Saved Party";
-        persist();
-        renderParty();
-        return;
-      }
-
-      const partyRow = target.closest(".party-member-row");
-      if (partyRow) {
-        const idx = asInt(partyRow.getAttribute("data-party-index"), -1);
-        const field = target.getAttribute("data-party-field");
-        if (idx >= 0 && field) {
-          updatePartyPresetField(idx, field, target.value);
+        const editorAddFullPartyBtn = shadow.getElementById("editorAddFullPartyBtn");
+        if (editorAddFullPartyBtn) {
+          editorAddFullPartyBtn.addEventListener("click", () => {
+            party.members.forEach((m) => state.editor.combatants.push(cloneCombatant(m, true)));
+            persistAndRender();
+          });
         }
-        return;
       }
 
-      const card = target.closest(".card");
-      if (!card) return;
-      const cardId = card.dataset.id;
-      if (!cardId) return;
+      shadow.querySelectorAll("[data-editor-field]").forEach((el) => {
+        el.addEventListener("input", () => {
+          const id = el.getAttribute("data-editor-id");
+          const field = el.getAttribute("data-editor-field");
+          const c = state.editor.combatants.find((x) => x.id === id);
+          if (!c) return;
+          if (field === "name" || field === "type") {
+            c[field] = el.value;
+          } else {
+            c[field] = Math.max(0, intOr(el.value, c[field]));
+            if (field === "hpMax") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
+            if (field === "hpCurrent") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
+          }
+          saveState(state);
+        });
+      });
 
-      const field = target.getAttribute("data-field");
-      if (field) {
-        updateCardField(cardId, field, target.value);
+      shadow.querySelectorAll("[data-editor-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-editor-remove");
+          state.editor.combatants = state.editor.combatants.filter((c) => c.id !== id);
+          persistAndRender();
+        });
+      });
+
+      shadow.querySelectorAll("[data-editor-dmg]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-editor-dmg");
+          const c = state.editor.combatants.find((x) => x.id === id);
+          if (!c) return;
+          const amountEl = shadow.querySelector(`[data-editor-amount-for="${id}"]`);
+          const amount = Math.max(1, intOr(amountEl?.value, 1));
+          c.hpCurrent = clamp(c.hpCurrent - amount, 0, c.hpMax);
+          persistAndRender();
+        });
+      });
+
+      shadow.querySelectorAll("[data-editor-heal]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-editor-heal");
+          const c = state.editor.combatants.find((x) => x.id === id);
+          if (!c) return;
+          const amountEl = shadow.querySelector(`[data-editor-amount-for="${id}"]`);
+          const amount = Math.max(1, intOr(amountEl?.value, 1));
+          c.hpCurrent = clamp(c.hpCurrent + amount, 0, c.hpMax);
+          persistAndRender();
+        });
+      });
+
+      // drag editor cards
+      const list = shadow.getElementById("editorInitiativeList");
+      if (list) {
+        list.querySelectorAll("[data-editor-card-id]").forEach((card) => {
+          const id = card.getAttribute("data-editor-card-id");
+          card.addEventListener("dragstart", (e) => {
+            dragEditorId = id;
+            card.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", id || "");
+          });
+          card.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+          });
+          card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          });
+          card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            const targetId = card.getAttribute("data-editor-card-id");
+            if (!dragEditorId || !targetId) return;
+            state.editor.combatants = moveItem(state.editor.combatants, dragEditorId, targetId);
+            dragEditorId = null;
+            persistAndRender();
+          });
+        });
+
+        list.addEventListener("dragover", (e) => e.preventDefault());
+        list.addEventListener("drop", (e) => {
+          const target = e.target.closest("[data-editor-card-id]");
+          if (target || !dragEditorId) return;
+          state.editor.combatants = moveToEnd(state.editor.combatants, dragEditorId);
+          dragEditorId = null;
+          persistAndRender();
+        });
       }
-    });
 
-    refs.addName.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        addCombatantFromInputs();
+      const saveBtn = shadow.getElementById("editorSaveBtn");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", () => {
+          const name = (state.editor.name || "Untitled Encounter").trim() || "Untitled Encounter";
+          const tags = (state.editor.tags || "").trim();
+          const location = (state.editor.location || "").trim();
+          const combatants = state.editor.combatants.map((c) => cloneCombatant(c, true));
+
+          if (state.editorEncounterId) {
+            const target = state.library.find((e) => e.id === state.editorEncounterId);
+            if (target) {
+              target.name = name;
+              target.tags = tags;
+              target.location = location;
+              target.combatants = combatants;
+            } else {
+              state.library.unshift({ id: state.editorEncounterId, name, tags, location, combatants });
+            }
+          } else {
+            const newEntry = { id: uid("enc"), name, tags, location, combatants };
+            state.library.unshift(newEntry);
+            state.editorEncounterId = newEntry.id;
+          }
+
+          state.editorOpen = false;
+          state.editorEncounterId = null;
+          state.tab = "library";
+          persistAndRender();
+        });
       }
-    });
+    }
 
-    renderRoundAndTurn();
-    renderAddSectionState();
-    renderParty();
-    renderPartyEditor();
-    renderCards();
-    renderLibraryDraftDefaults();
-    renderLibrary();
-    setTab("active");
+    function render() {
+      shadow.innerHTML = template();
+      bindGeneralEvents();
+    }
+
+    return { render };
   }
 
   registerEncounterTool();
@@ -1976,7 +2063,6 @@
 
       return prevRender(toolId);
     };
-
     wrappedRender.__encounterToolWrapped = true;
     window.renderToolPanel = wrappedRender;
   }
