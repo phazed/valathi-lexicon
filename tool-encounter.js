@@ -593,7 +593,10 @@
                 <div class="card-content">
                   <div class="name-block">
                     <div class="name-row">
-                      <span class="card-name">${esc(c.name)}</span>
+                      <span class="inline-edit inline-edit-name" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="name" data-type="text">
+                        <span class="inline-view card-name" title="Click to edit">${esc(c.name)}</span>
+                        <input class="inline-input inline-input-name" type="text" value="${esc(c.name)}" aria-label="Edit name">
+                      </span>
                       <span class="card-tag">${esc(c.type)}</span>
                     </div>
                   </div>
@@ -615,11 +618,26 @@
                     <div class="card-meta-top">
                       <div class="meta-init-center">
                         <span class="meta-k">Init</span>
-                        <span class="meta-v">${intOr(c.initiative, 0)}</span>
+                        <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="initiative" data-type="number">
+                          <span class="inline-view meta-v" title="Click to edit">${intOr(c.initiative, 0)}</span>
+                          <input class="inline-input inline-input-meta" type="number" min="0" value="${intOr(c.initiative, 0)}" aria-label="Edit initiative">
+                        </span>
                       </div>
                       <div class="meta-stack-read">
-                        <div class="meta-read-line"><span class="meta-k">AC</span><span class="meta-v">${c.ac}</span></div>
-                        <div class="meta-read-line"><span class="meta-k">Spd</span><span class="meta-v">${c.speed}</span></div>
+                        <div class="meta-read-line">
+                          <span class="meta-k">AC</span>
+                          <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="ac" data-type="number">
+                            <span class="inline-view meta-v" title="Click to edit">${c.ac}</span>
+                            <input class="inline-input inline-input-meta" type="number" min="0" value="${c.ac}" aria-label="Edit AC">
+                          </span>
+                        </div>
+                        <div class="meta-read-line">
+                          <span class="meta-k">Spd</span>
+                          <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="speed" data-type="number">
+                            <span class="inline-view meta-v" title="Click to edit">${c.speed}</span>
+                            <input class="inline-input inline-input-meta" type="number" min="0" value="${c.speed}" aria-label="Edit speed">
+                          </span>
+                        </div>
                       </div>
                       <button class="btn-icon" title="Remove" data-remove-card="${esc(c.id)}">×</button>
                     </div>
@@ -705,7 +723,10 @@ function renderLibraryTab() {
                     <div class="card-content">
                       <div class="name-block">
                         <div class="name-row">
-                          <span class="card-name">${esc(c.name)}</span>
+                          <span class="inline-edit inline-edit-name" data-inline-edit data-scope="library" data-lib-enc-id="${esc(enc.id)}" data-card-id="${esc(c.id)}" data-field="name" data-type="text">
+                            <span class="inline-view card-name" title="Click to edit">${esc(c.name)}</span>
+                            <input class="inline-input inline-input-name" type="text" value="${esc(c.name)}" aria-label="Edit name">
+                          </span>
                           <span class="card-tag">${esc(c.type)}</span>
                         </div>
                       </div>
@@ -719,11 +740,26 @@ function renderLibraryTab() {
                         <div class="card-meta-top">
                           <div class="meta-init-center">
                             <span class="meta-k">Init</span>
-                            <span class="meta-v">${intOr(c.initiative, 0)}</span>
+                            <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="library" data-lib-enc-id="${esc(enc.id)}" data-card-id="${esc(c.id)}" data-field="initiative" data-type="number">
+                              <span class="inline-view meta-v" title="Click to edit">${intOr(c.initiative, 0)}</span>
+                              <input class="inline-input inline-input-meta" type="number" min="0" value="${intOr(c.initiative, 0)}" aria-label="Edit initiative">
+                            </span>
                           </div>
                           <div class="meta-stack-read">
-                            <div class="meta-read-line"><span class="meta-k">AC</span><span class="meta-v">${c.ac}</span></div>
-                            <div class="meta-read-line"><span class="meta-k">Spd</span><span class="meta-v">${c.speed}</span></div>
+                            <div class="meta-read-line">
+                              <span class="meta-k">AC</span>
+                              <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="library" data-lib-enc-id="${esc(enc.id)}" data-card-id="${esc(c.id)}" data-field="ac" data-type="number">
+                                <span class="inline-view meta-v" title="Click to edit">${c.ac}</span>
+                                <input class="inline-input inline-input-meta" type="number" min="0" value="${c.ac}" aria-label="Edit AC">
+                              </span>
+                            </div>
+                            <div class="meta-read-line">
+                              <span class="meta-k">Spd</span>
+                              <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="library" data-lib-enc-id="${esc(enc.id)}" data-card-id="${esc(c.id)}" data-field="speed" data-type="number">
+                                <span class="inline-view meta-v" title="Click to edit">${c.speed}</span>
+                                <input class="inline-input inline-input-meta" type="number" min="0" value="${c.speed}" aria-label="Edit speed">
+                              </span>
+                            </div>
                           </div>
                           <button class="btn-icon" title="Remove" data-lib-remove-card="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">×</button>
                         </div>
@@ -1174,6 +1210,61 @@ function renderEditorModal() {
           max-width: 100%;
         }
 
+        .inline-edit {
+          display: inline-flex;
+          align-items: center;
+          min-width: 0;
+          max-width: 100%;
+          cursor: text;
+        }
+
+        .inline-view {
+          display: inline-flex;
+          align-items: center;
+          min-width: 0;
+          max-width: 100%;
+        }
+
+        .inline-input {
+          display: none;
+          min-width: 0;
+          font-family: inherit;
+          background: #05070c;
+          color: var(--text-main);
+          border: 1px solid #414957;
+          border-radius: 6px;
+          padding: 2px 6px;
+        }
+
+        .inline-edit.editing .inline-view {
+          display: none;
+        }
+
+        .inline-edit.editing .inline-input {
+          display: inline-flex;
+        }
+
+        .inline-edit-name { flex: 1; }
+
+        .inline-input-name {
+          width: min(260px, 100%);
+          font-size: 0.86rem;
+          line-height: 1.2;
+          padding: 3px 7px;
+        }
+
+        .inline-edit-meta {
+          min-width: 26px;
+          justify-content: flex-end;
+        }
+
+        .inline-input-meta {
+          width: 54px;
+          font-size: 0.78rem;
+          text-align: center;
+          padding: 2px 4px;
+        }
+
         .card-tag {
           font-size: 0.7rem;
           line-height: 1;
@@ -1427,6 +1518,94 @@ function renderEditorModal() {
       `;
     }
 
+    function bindInlineEditEvents() {
+      shadow.querySelectorAll("[data-inline-edit]").forEach((editor) => {
+        const view = editor.querySelector(".inline-view");
+        const input = editor.querySelector(".inline-input");
+        if (!view || !input) return;
+
+        const openEditor = () => {
+          editor.classList.add("editing");
+          input.focus();
+          input.select();
+        };
+
+        const cancelEditor = () => {
+          editor.classList.remove("editing");
+          input.value = view.textContent?.trim() || "";
+        };
+
+        const commitEditor = () => {
+          const scope = editor.getAttribute("data-scope");
+          const field = editor.getAttribute("data-field");
+          const type = editor.getAttribute("data-type");
+          const cardId = editor.getAttribute("data-card-id");
+
+          if (!scope || !field || !cardId) {
+            editor.classList.remove("editing");
+            return;
+          }
+
+          let target = null;
+          if (scope === "active") {
+            target = state.activeCombatants.find((c) => c.id === cardId) || null;
+          } else if (scope === "library") {
+            const encId = editor.getAttribute("data-lib-enc-id");
+            const enc = state.library.find((e) => e.id === encId);
+            if (enc) target = enc.combatants.find((c) => c.id === cardId) || null;
+          }
+
+          if (!target) {
+            editor.classList.remove("editing");
+            persistAndRender();
+            return;
+          }
+
+          let nextValue;
+          if (type === "text" || field === "name") {
+            nextValue = String(input.value || "").trim() || "Unnamed";
+          } else {
+            nextValue = Math.max(0, intOr(input.value, target[field]));
+          }
+
+          target[field] = nextValue;
+          editor.classList.remove("editing");
+          persistAndRender();
+        };
+
+        view.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+
+        view.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openEditor();
+        });
+
+        input.addEventListener("mousedown", (e) => e.stopPropagation());
+        input.addEventListener("click", (e) => e.stopPropagation());
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            input.blur();
+            return;
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            cancelEditor();
+          }
+        });
+
+        input.addEventListener("blur", () => {
+          if (!editor.classList.contains("editing")) return;
+          commitEditor();
+        });
+      });
+    }
+
     function bindGeneralEvents() {
       // tabs
       shadow.querySelectorAll("[data-tab]").forEach((btn) => {
@@ -1656,6 +1835,8 @@ function renderEditorModal() {
           saveState(state);
         });
       });
+
+      bindInlineEditEvents();
 
       shadow.querySelectorAll("[data-remove-card]").forEach((btn) => {
         btn.addEventListener("click", () => {
