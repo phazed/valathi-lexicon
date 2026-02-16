@@ -63,6 +63,35 @@
       .replace(/'/g, "&#39;");
   }
 
+  function flattenText(value, depth = 0) {
+    if (value == null) return "";
+    if (depth > 4) return "";
+
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => flattenText(v, depth + 1))
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    if (typeof value === "object") {
+      const entries = Object.entries(value)
+        .map(([k, v]) => {
+          const inner = flattenText(v, depth + 1);
+          if (!inner) return "";
+          const key = String(k || "").replace(/_/g, " ").trim();
+          return key ? `${key}: ${inner}` : inner;
+        })
+        .filter(Boolean);
+      return entries.join(", ");
+    }
+
+    return String(value).trim();
+  }
+
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
@@ -154,9 +183,9 @@
           const name = String(
             item.name || item.title || item.label || item.action || "Feature"
           ).trim() || "Feature";
-          const text = String(
-            item.text || item.desc || item.description || item.effect || ""
-          ).trim();
+          const text = flattenText(
+            item.text || item.desc || item.description || item.effect || item.entries || item
+          );
           if (!text) return null;
           return {
             name,
@@ -216,15 +245,15 @@
           ? null
           : clamp(intOr(details.proficiencyBonus ?? details.pb, 2), 0, 20),
       abilityScores: normalizeAbilities(abilitiesSource),
-      savingThrows: String(details.savingThrows || details.saves || "").trim(),
-      skills: String(details.skills || "").trim(),
-      damageVulnerabilities: String(details.damageVulnerabilities || details.vulnerabilities || "").trim(),
-      damageResistances: String(details.damageResistances || details.resistances || "").trim(),
-      damageImmunities: String(details.damageImmunities || details.immunities || "").trim(),
-      conditionImmunities: String(details.conditionImmunities || "").trim(),
-      senses: String(details.senses || "").trim(),
-      languages: String(details.languages || "").trim(),
-      challengeNote: String(details.challengeNote || details.challenge || "").trim(),
+      savingThrows: flattenText(details.savingThrows ?? details.saves),
+      skills: flattenText(details.skills),
+      damageVulnerabilities: flattenText(details.damageVulnerabilities ?? details.vulnerabilities),
+      damageResistances: flattenText(details.damageResistances ?? details.resistances),
+      damageImmunities: flattenText(details.damageImmunities ?? details.immunities),
+      conditionImmunities: flattenText(details.conditionImmunities),
+      senses: flattenText(details.senses),
+      languages: flattenText(details.languages),
+      challengeNote: flattenText(details.challengeNote ?? details.challenge),
       traits: normalizeFeatureArray(details.traits),
       actions: normalizeFeatureArray(details.actions),
       bonusActions: normalizeFeatureArray(details.bonusActions),
@@ -311,6 +340,7 @@
       search: "",
       sourceFilter: "all",
       crFilter: "all",
+      activeTab: "vault",
       homebrew: [],
       srdDetailsById: {},
       srdDetailLookupFailures: {},
@@ -346,15 +376,15 @@
       cha: clamp(intOr(d.cha, base.cha), 1, 30),
       pb: clamp(intOr(d.pb, base.pb), 0, 20),
 
-      savingThrows: String(d.savingThrows || ""),
-      skills: String(d.skills || ""),
-      damageVulnerabilities: String(d.damageVulnerabilities || ""),
-      damageResistances: String(d.damageResistances || ""),
-      damageImmunities: String(d.damageImmunities || ""),
-      conditionImmunities: String(d.conditionImmunities || ""),
-      senses: String(d.senses || ""),
-      languages: String(d.languages || ""),
-      challengeNote: String(d.challengeNote || ""),
+      savingThrows: flattenText(d.savingThrows),
+      skills: flattenText(d.skills),
+      damageVulnerabilities: flattenText(d.damageVulnerabilities),
+      damageResistances: flattenText(d.damageResistances),
+      damageImmunities: flattenText(d.damageImmunities),
+      conditionImmunities: flattenText(d.conditionImmunities),
+      senses: flattenText(d.senses),
+      languages: flattenText(d.languages),
+      challengeNote: flattenText(d.challengeNote),
 
       traitsText: String(d.traitsText || ""),
       actionsText: String(d.actionsText || ""),
@@ -390,6 +420,7 @@
     base.search = String(s.search || "");
     base.sourceFilter = String(s.sourceFilter || "all");
     base.crFilter = String(s.crFilter || "all");
+    base.activeTab = s.activeTab === "homebrew" ? "homebrew" : "vault";
     base.editingId = s.editingId ? String(s.editingId) : null;
     base.expandedIds = Array.isArray(s.expandedIds) ? s.expandedIds.map((x) => String(x)) : [];
 
@@ -495,14 +526,14 @@
 
     const senses = raw.senses && typeof raw.senses === "object"
       ? Object.entries(raw.senses)
-          .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`)
+          .map(([k, v]) => {
+            const val = flattenText(v);
+            if (!val) return "";
+            return `${String(k || "").replace(/_/g, " ")}: ${val}`;
+          })
+          .filter(Boolean)
           .join(", ")
-      : String(raw.senses || "");
-
-    const asStringList = (v) => {
-      if (Array.isArray(v)) return v.map((x) => String(x)).filter(Boolean).join(", ");
-      return String(v || "");
-    };
+      : flattenText(raw.senses);
 
     const details = {
       proficiencyBonus: raw.proficiency_bonus ?? raw.prof_bonus ?? null,
@@ -514,15 +545,15 @@
         wis: raw.wisdom ?? raw.wis,
         cha: raw.charisma ?? raw.cha
       }),
-      savingThrows: asStringList(raw.saving_throws || raw.saves || raw.proficiencies),
-      skills: asStringList(raw.skills),
-      damageVulnerabilities: asStringList(raw.damage_vulnerabilities),
-      damageResistances: asStringList(raw.damage_resistances),
-      damageImmunities: asStringList(raw.damage_immunities),
-      conditionImmunities: asStringList(raw.condition_immunities),
+      savingThrows: flattenText(raw.saving_throws ?? raw.saves ?? raw.proficiencies),
+      skills: flattenText(raw.skills),
+      damageVulnerabilities: flattenText(raw.damage_vulnerabilities),
+      damageResistances: flattenText(raw.damage_resistances),
+      damageImmunities: flattenText(raw.damage_immunities),
+      conditionImmunities: flattenText(raw.condition_immunities),
       senses,
-      languages: asStringList(raw.languages),
-      challengeNote: String(raw.challenge_rating || raw.cr || ""),
+      languages: flattenText(raw.languages),
+      challengeNote: flattenText(raw.challenge_rating ?? raw.cr),
       traits: normalizeFeatureArray(raw.special_abilities || raw.traits),
       actions: normalizeFeatureArray(raw.actions),
       bonusActions: normalizeFeatureArray(raw.bonus_actions),
@@ -739,6 +770,34 @@
     saveState(state);
   }
 
+  async function toggleDetailsWithFetch(id) {
+    if (!id) return;
+
+    const mon = allMonsters().find((m) => m.id === id);
+    if (!mon) return;
+
+    if (state.expandedIds.includes(id)) {
+      state.expandedIds = state.expandedIds.filter((x) => x !== id);
+      saveState(state);
+      return;
+    }
+
+    if (!mon.isHomebrew && !hasDetails(mon) && !srdLoadInFlight.has(id)) {
+      srdLoadInFlight.add(id);
+      renderMonsterVaultTool();
+      try {
+        await hydrateSrdDetailsById(id);
+      } finally {
+        srdLoadInFlight.delete(id);
+      }
+    }
+
+    if (!state.expandedIds.includes(id)) {
+      state.expandedIds.push(id);
+      saveState(state);
+    }
+  }
+
   function exportHomebrew() {
     const payload = {
       exportedAt: new Date().toISOString(),
@@ -812,12 +871,12 @@
       source: src.source,
       xp: src.xp,
       sizeType: src.sizeType,
-      details: JSON.parse(JSON.stringify(src.details || {})),
-      traits: JSON.parse(JSON.stringify(src.details?.traits || [])),
-      actions: JSON.parse(JSON.stringify(src.details?.actions || [])),
-      bonusActions: JSON.parse(JSON.stringify(src.details?.bonusActions || [])),
-      reactions: JSON.parse(JSON.stringify(src.details?.reactions || [])),
-      legendaryActions: JSON.parse(JSON.stringify(src.details?.legendaryActions || [])),
+      details: extractDetailsFromRaw({ details: src.details || {} }),
+      traits: normalizeFeatureArray(src.details?.traits || src.traits || []),
+      actions: normalizeFeatureArray(src.details?.actions || src.actions || []),
+      bonusActions: normalizeFeatureArray(src.details?.bonusActions || src.bonusActions || []),
+      reactions: normalizeFeatureArray(src.details?.reactions || src.reactions || []),
+      legendaryActions: normalizeFeatureArray(src.details?.legendaryActions || src.legendaryActions || []),
       conditions: []
     };
 
@@ -836,6 +895,23 @@
       version: 2,
       getAllMonsters() {
         return allMonsters().map((m) => JSON.parse(JSON.stringify(m)));
+      },
+      getMonsterIndex() {
+        return allMonsters().map((m) => ({
+          id: m.id,
+          name: m.name,
+          type: m.type,
+          cr: m.cr,
+          level: m.level,
+          ac: m.ac,
+          hp: m.hp,
+          speed: m.speed,
+          initiative: m.initiative,
+          xp: m.xp,
+          sizeType: m.sizeType,
+          source: m.source,
+          isHomebrew: !!m.isHomebrew
+        }));
       },
       getMonsterById(id) {
         const mon = allMonsters().find((m) => m.id === id);
@@ -912,7 +988,9 @@
       ["Senses", d.senses],
       ["Languages", d.languages],
       ["Challenge Notes", d.challengeNote]
-    ].filter(([, value]) => String(value || "").trim());
+    ]
+      .map(([k, v]) => [k, flattenText(v)])
+      .filter(([, value]) => String(value || "").trim());
 
     const actionCount =
       (d.actions?.length || 0) +
@@ -948,7 +1026,7 @@
             ${renderFeatureList("Reactions", d.reactions)}
             ${renderFeatureList("Legendary Actions", d.legendaryActions)}
           `
-          : `<div class="mv-muted" style="margin-top:4px;">No actions recorded for this entry yet. Add them in homebrew editor to use attack/details toggles in encounter cards.</div>`}
+          : `<div class="mv-muted" style="margin-top:4px;">No actions listed for this entry.</div>`}
       </div>
     `;
   }
@@ -960,7 +1038,6 @@
         const isOpen = state.expandedIds.includes(m.id);
         const tag = m.isHomebrew ? "Homebrew" : "SRD";
         const actionsCount = (m.details?.actions?.length || 0) + (m.details?.bonusActions?.length || 0) + (m.details?.reactions?.length || 0) + (m.details?.legendaryActions?.length || 0);
-        const hasLoadedDetails = hasDetails(m);
         const isLoading = srdLoadInFlight.has(m.id);
 
         const actions = m.isHomebrew
@@ -982,14 +1059,11 @@
                   CR ${esc(m.cr)} · XP ${Number(m.xp || 0).toLocaleString()} · AC ${m.ac} · HP ${m.hp} · Spd ${m.speed} · Init ${m.initiative}
                 </div>
                 <div class="mv-submeta">
-                  ${esc(m.sizeType)} · ${esc(m.source)}${hasDetails(m) ? ` · Details ${actionsCount ? `· Actions ${actionsCount}` : ""}` : " · Details not loaded"}
+                  ${esc(m.sizeType)} · ${esc(m.source)}${hasDetails(m) ? ` · Details ready${actionsCount ? ` · Actions ${actionsCount}` : ""}` : " · Details on demand"}
                 </div>
               </div>
               <div class="mv-actions">
-                <button class="btn btn-secondary btn-xs" data-mv-toggle="${esc(m.id)}">${isOpen ? "Hide details" : "Details"}</button>
-                ${!m.isHomebrew && !hasLoadedDetails
-                  ? `<button class="btn btn-secondary btn-xs" data-mv-load-srd="${esc(m.id)}">${isLoading ? "Loading..." : "Load attacks"}</button>`
-                  : ""}
+                <button class="btn btn-secondary btn-xs" data-mv-toggle="${esc(m.id)}" ${isLoading ? "disabled" : ""}>${isOpen ? "Hide details" : (isLoading ? "Loading..." : "Details")}</button>
                 ${actions}
               </div>
             </div>
@@ -1046,6 +1120,33 @@
           color: #97a9ce;
         }
 
+        .mv-tabs {
+          display: flex;
+          gap: 6px;
+          border: 1px solid #2a3240;
+          border-radius: 10px;
+          background: #0b111a;
+          padding: 6px;
+        }
+
+        .mv-tab {
+          border: 1px solid #2c3750;
+          background: #0a111a;
+          color: #9eb2d7;
+          border-radius: 8px;
+          padding: 6px 10px;
+          font-size: .75rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .mv-tab.active {
+          border-color: #4d6290;
+          color: #eef4ff;
+          background: #121c2b;
+          box-shadow: 0 0 0 1px rgba(106, 132, 183, 0.24);
+        }
+
         .mv-controls {
           display: grid;
           grid-template-columns: 1.4fr .6fr .5fr;
@@ -1054,9 +1155,13 @@
 
         .mv-layout {
           display: grid;
-          grid-template-columns: 1.35fr .95fr;
+          grid-template-columns: 1fr;
           gap: 10px;
           min-height: 520px;
+        }
+
+        .mv-hidden {
+          display: none !important;
         }
 
         .mv-card {
@@ -1065,6 +1170,11 @@
           background: #0a0f16;
           padding: 8px;
           min-width: 0;
+        }
+
+        .mv-card-editor {
+          max-height: 74vh;
+          overflow: auto;
         }
 
         .mv-list {
@@ -1132,6 +1242,11 @@
           gap: 6px;
           flex-wrap: wrap;
           justify-content: flex-end;
+        }
+
+        .mv-actions .btn:disabled {
+          opacity: 0.6;
+          cursor: default;
         }
 
         .mv-source-tag {
@@ -1299,9 +1414,6 @@
         }
 
         @media (max-width: 1120px) {
-          .mv-layout {
-            grid-template-columns: 1fr;
-          }
           .mv-controls {
             grid-template-columns: 1fr;
           }
@@ -1336,7 +1448,12 @@
           </div>
         </div>
 
-        <div class="mv-controls">
+        <div class="mv-tabs">
+          <button class="mv-tab ${state.activeTab === "vault" ? "active" : ""}" data-mv-tab="vault">Vault</button>
+          <button class="mv-tab ${state.activeTab === "homebrew" ? "active" : ""}" data-mv-tab="homebrew">${state.editingId ? "Edit Homebrew" : "Create Homebrew"}</button>
+        </div>
+
+        <div class="mv-controls ${state.activeTab === "homebrew" ? "mv-hidden" : ""}">
           <div>
             <label for="mvSearch">Search</label>
             <input id="mvSearch" type="text" placeholder="Search monsters, attacks, traits..." value="${esc(state.search)}">
@@ -1359,14 +1476,14 @@
         </div>
 
         <div class="mv-layout">
-          <div class="mv-card">
+          <div class="mv-card ${state.activeTab === "vault" ? "" : "mv-hidden"}">
             <div class="mv-muted" style="margin-bottom:8px;">${filtered.length} result${filtered.length === 1 ? "" : "s"}${filtered.length > 420 ? " (showing first 420)" : ""}</div>
             <div class="mv-list">
               ${renderMonsterRows(filtered) || `<div class="mv-muted">No monsters match your filters.</div>`}
             </div>
           </div>
 
-          <div class="mv-card">
+          <div class="mv-card mv-card-editor ${state.activeTab === "homebrew" ? "" : "mv-hidden"}">
             <div class="mv-editor-title">${state.editingId ? "Edit homebrew monster" : "Create homebrew monster"}</div>
             <div class="mv-form-grid">
               <div class="full">
@@ -1553,6 +1670,16 @@
       });
     }
 
+    panel.querySelectorAll("[data-mv-tab]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const next = btn.getAttribute("data-mv-tab");
+        if (!next) return;
+        state.activeTab = next === "homebrew" ? "homebrew" : "vault";
+        saveState(state);
+        renderMonsterVaultTool();
+      });
+    });
+
     const exportBtn = panel.querySelector("#mvExportBtn");
     if (exportBtn) exportBtn.addEventListener("click", exportHomebrew);
 
@@ -1571,37 +1698,7 @@
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-mv-toggle");
         if (!id) return;
-
-        const mon = allMonsters().find((m) => m.id === id);
-        const isOpening = !state.expandedIds.includes(id);
-        if (isOpening && mon && !mon.isHomebrew && !hasDetails(mon) && !srdLoadInFlight.has(id)) {
-          srdLoadInFlight.add(id);
-          renderMonsterVaultTool();
-          try {
-            await hydrateSrdDetailsById(id);
-          } finally {
-            srdLoadInFlight.delete(id);
-          }
-        }
-
-        toggleExpanded(id);
-        renderMonsterVaultTool();
-      });
-    });
-
-
-    panel.querySelectorAll("[data-mv-load-srd]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-mv-load-srd");
-        if (!id || srdLoadInFlight.has(id)) return;
-        srdLoadInFlight.add(id);
-        renderMonsterVaultTool();
-        try {
-          await hydrateSrdDetailsById(id);
-          if (!state.expandedIds.includes(id)) toggleExpanded(id);
-        } finally {
-          srdLoadInFlight.delete(id);
-        }
+        await toggleDetailsWithFetch(id);
         renderMonsterVaultTool();
       });
     });
@@ -1612,6 +1709,7 @@
         const mon = state.homebrew.find((m) => m.id === id);
         if (!mon) return;
         setDraftFromMonster(mon, "edit");
+        state.activeTab = "homebrew";
         saveState(state);
         renderMonsterVaultTool();
       });
@@ -1624,6 +1722,7 @@
         const mon = allMonsters().find((m) => m.id === id);
         if (!mon) return;
         setDraftFromMonster(mon, "clone");
+        state.activeTab = "homebrew";
         saveState(state);
         renderMonsterVaultTool();
       });
@@ -1686,6 +1785,7 @@
         }
 
         upsertHomebrewFromDraft();
+        state.activeTab = "vault";
         renderMonsterVaultTool();
       });
     }
