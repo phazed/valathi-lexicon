@@ -766,7 +766,7 @@ function stepConditionDurations(unit) {
       persistAndRender();
     }
 
-    function renderConditionBadges(c) {
+    function renderConditionBadges(c, variant = "default") {
       const chips = [];
       (c.conditions || []).forEach((cond) => {
         const suffix = conditionDurationShort(cond);
@@ -777,7 +777,8 @@ function stepConditionDurations(unit) {
         chips.push(`<span class="condition-chip exhaustion" title="${esc(conditionTooltip("Exhaustion"))}">Exhaustion ${c.exhaustionLevel}</span>`);
       }
       if (!chips.length) return "";
-      return `<div class="condition-row">${chips.join("")}</div>`;
+      const rowClass = variant === "inline" ? "condition-row condition-row-inline" : "condition-row";
+      return `<div class="${rowClass}">${chips.join("")}</div>`;
     }
 
     function getEncounterDifficulty(combatants = state.activeCombatants) {
@@ -1532,7 +1533,7 @@ function stepConditionDurations(unit) {
             <div class="card ${typeClass} ${active ? "active-turn" : ""} ${downed ? "downed" : ""}" draggable="true" data-card-id="${esc(c.id)}">
               <div class="card-main">
                 ${portraitMarkup(c, "active")}
-                <div class="card-content">
+                <div class="card-content active-card-content">
                   <div class="name-block">
                     <div class="name-row">
                       <span class="inline-edit inline-edit-name" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="name" data-type="text">
@@ -1555,6 +1556,10 @@ function stepConditionDurations(unit) {
                       <button class="btn btn-secondary btn-xs" data-heal="${esc(c.id)}">Heal</button>
                       <button class="btn btn-secondary btn-xs" data-open-conds="${esc(c.id)}">Conditions</button>
                     </div>
+                  </div>
+
+                  <div class="card-conditions-slot">
+                    ${renderConditionBadges(c, "inline")}
                   </div>
 
                   <div class="card-meta">
@@ -1591,7 +1596,6 @@ function stepConditionDurations(unit) {
                       </div>
                       <button class="btn-icon" title="Remove" data-remove-card="${esc(c.id)}">×</button>
                     </div>
-                    ${renderConditionBadges(c)}
                   </div>
                 </div>
               </div>
@@ -2225,11 +2229,27 @@ function renderEditorModal() {
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(140px,1.15fr) minmax(280px,1.05fr) minmax(150px,0.95fr);
+          grid-template-columns: minmax(170px,1.25fr) minmax(270px,1.02fr) minmax(150px,0.9fr);
           grid-template-areas: "name hp meta";
           align-items: center;
           column-gap: 8px;
           row-gap: 2px;
+        }
+
+        .card-content.active-card-content {
+          grid-template-columns: minmax(175px,1.2fr) minmax(260px,1.02fr) minmax(150px,0.82fr) minmax(148px,0.9fr);
+          grid-template-areas: "name hp cond meta";
+          column-gap: 8px;
+        }
+
+        .card-conditions-slot {
+          grid-area: cond;
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          justify-self: center;
+          width: 100%;
         }
 
         .name-block {
@@ -2244,7 +2264,7 @@ function renderEditorModal() {
           justify-content: flex-start;
           gap: 6px;
           min-width: 0;
-          width: auto;
+          width: 100%;
         }
 
         .card-name {
@@ -2308,9 +2328,9 @@ function renderEditorModal() {
         }
 
         .inline-edit-name {
-          flex: 0 1 auto;
+          flex: 1 1 auto;
           min-width: 0;
-          max-width: calc(100% - 58px);
+          max-width: none;
         }
 
         .inline-input-name {
@@ -2645,7 +2665,7 @@ function renderEditorModal() {
         }
 
         .condition-row {
-          margin-top: 2px;
+          margin-top: 0;
           display: flex;
           flex-wrap: nowrap;
           align-items: center;
@@ -2656,6 +2676,31 @@ function renderEditorModal() {
           max-width: 240px;
           overflow-x: auto;
           scrollbar-width: thin;
+        }
+
+        .condition-row.condition-row-inline {
+          margin: 0;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 3px 4px;
+          align-content: center;
+          justify-items: stretch;
+          width: 100%;
+          max-width: 156px;
+          max-height: 56px;
+          overflow-x: hidden;
+          overflow-y: auto;
+          padding-right: 1px;
+        }
+
+        .condition-row.condition-row-inline .condition-chip {
+          width: 100%;
+          justify-content: center;
+          padding: 2px 6px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-size: 0.64rem;
         }
 
         .card-meta .condition-row {
@@ -2874,11 +2919,24 @@ function renderEditorModal() {
               "meta";
             row-gap: 4px;
           }
+          .card-content.active-card-content {
+            grid-template-areas:
+              "name"
+              "hp"
+              "cond"
+              "meta";
+          }
           .name-block,
           .name-row { justify-content: center; }
           .card-meta { justify-self: center; align-items: center; }
           .hp-block { justify-self: center; }
+          .card-conditions-slot { justify-self: center; width: 100%; }
           .condition-row { justify-content: center; max-width: 100%; }
+          .condition-row.condition-row-inline {
+            max-width: min(340px, 100%);
+            max-height: none;
+            overflow: visible;
+          }
         }
 
         .encounter-row.editing {
