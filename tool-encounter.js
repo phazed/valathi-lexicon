@@ -599,9 +599,34 @@
           gap: 6px;
         }
 
+        .boxed-subsection-title-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border: none;
+          background: transparent;
+          color: inherit;
+          font: inherit;
+          padding: 0;
+          margin: 0;
+          cursor: pointer;
+        }
+
+        .boxed-subsection-body {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .boxed-subsection.collapsed .boxed-subsection-body {
+          display: none;
+        }
+
         .chevron {
           font-size: 0.9rem;
           color: var(--accent-soft);
+          width: 10px;
+          text-align: center;
         }
 
         .initiative-list {
@@ -866,13 +891,6 @@
           gap: 4px;
         }
 
-        .party-name {
-          font-size: 0.78rem;
-          color: var(--accent-soft);
-          font-weight: 500;
-          margin-right: 4px;
-        }
-
         .party-chip {
           display: inline-flex;
           align-items: center;
@@ -898,6 +916,57 @@
           color: var(--accent-strong);
         }
 
+        .party-editor {
+          border-radius: 8px;
+          border: 1px solid #222832;
+          background: #070a10;
+          padding: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .party-editor-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .party-member-row {
+          border-radius: 8px;
+          border: 1px solid #262c37;
+          background: #080b11;
+          padding: 6px;
+          display: grid;
+          grid-template-columns: minmax(120px, 1.4fr) 90px 60px 70px 84px 84px 30px;
+          gap: 6px;
+          align-items: end;
+        }
+
+        .party-member-row .field label {
+          margin-bottom: 2px;
+          font-size: 0.7rem;
+        }
+
+        .party-member-row .field input,
+        .party-member-row .field select {
+          font-size: 0.75rem;
+          padding: 4px 6px;
+        }
+
+        .party-remove {
+          border: none;
+          background: transparent;
+          color: #d98a8a;
+          font-size: 0.95rem;
+          cursor: pointer;
+          line-height: 1;
+          padding: 0;
+          margin-bottom: 5px;
+        }
+
+        .party-remove:hover { color: #ff9999; }
+
         code {
           font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
           font-size: 0.74rem;
@@ -908,6 +977,17 @@
 
         .hidden {
           display: none !important;
+        }
+
+        @media (max-width: 1040px) {
+          .party-member-row {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .party-member-row .field:last-of-type,
+          .party-member-row .party-remove {
+            grid-column: span 1;
+          }
         }
 
         @media (max-width: 920px) {
@@ -924,6 +1004,10 @@
 
           .card-meta {
             align-items: flex-start;
+          }
+
+          .party-member-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
       </style>
@@ -971,53 +1055,79 @@
                 </div>
               </div>
 
-              <div class="party-strip">
-                <div class="party-row">
-                  <span id="savedPartyName" class="party-name">Saved party:</span>
-                  <span class="hint-text">Click + to add a member, or add all at once.</span>
-                </div>
-                <div id="partyChipRow" class="party-row"></div>
-              </div>
-
-              <div class="boxed-subsection">
+              <div id="addEditSection" class="boxed-subsection">
                 <div class="boxed-subsection-header">
                   <div class="boxed-subsection-title">
-                    <span class="chevron">▾</span>
-                    Add / edit combatants
+                    <button class="boxed-subsection-title-btn" data-action="toggle-add-section" type="button" aria-expanded="true">
+                      <span id="addSectionChevron" class="chevron">▾</span>
+                      <span>Add / edit combatants</span>
+                    </button>
                   </div>
-                  <span class="hint-text">Preload monsters or drop in ad-hoc PCs/NPCs.</span>
+                  <span class="hint-text">Quick add party members, tweak presets, or add any combatant manually.</span>
                 </div>
-                <div class="row">
-                  <div class="col">
-                    <label for="addName">Name</label>
-                    <input id="addName" type="text" placeholder="Vesper, Goblin Scout, Frostclaw Wolf">
-                  </div>
-                  <div class="col" style="max-width:80px;">
-                    <label for="addAc">AC</label>
-                    <input id="addAc" type="number" value="15" min="0">
-                  </div>
-                  <div class="col" style="max-width:100px;">
-                    <label for="addSpeed">Speed (ft)</label>
-                    <input id="addSpeed" type="number" value="30" min="0">
-                  </div>
-                  <div class="col" style="max-width:170px;">
-                    <label>HP (current / max)</label>
-                    <div style="display:flex; gap:4px;">
-                      <input id="addHpCur" type="number" value="27" min="0">
-                      <input id="addHpMax" type="number" value="35" min="0">
+                <div id="addEditBody" class="boxed-subsection-body">
+                  <div class="row">
+                    <div class="col">
+                      <label>Party preset · <span id="partyPresetMeta" class="hint-text"></span></label>
+                      <div id="partyChipRow" class="party-row"></div>
+                    </div>
+                    <div class="col" style="max-width:260px;">
+                      <label>&nbsp;</label>
+                      <div style="display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
+                        <button class="btn btn-xs" data-action="add-full-party" type="button">Add full party</button>
+                        <button class="btn btn-secondary btn-xs" data-action="toggle-party-editor" type="button">Manage party preset</button>
+                      </div>
                     </div>
                   </div>
-                  <div class="col" style="max-width:110px;">
-                    <label for="addType">Type</label>
-                    <select id="addType">
-                      <option>PC</option>
-                      <option>NPC</option>
-                      <option>Enemy</option>
-                    </select>
+
+                  <div id="partyEditor" class="party-editor hidden">
+                    <div class="row">
+                      <div class="col">
+                        <label for="partyNameInput">Party name</label>
+                        <input id="partyNameInput" type="text" placeholder="Frostclaw Cell" />
+                      </div>
+                      <div class="col" style="max-width:170px;">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-xs" data-action="party-add-member" type="button">+ Add member</button>
+                      </div>
+                    </div>
+                    <div id="partyEditorList" class="party-editor-list"></div>
                   </div>
-                  <div class="col" style="max-width:90px;">
-                    <label>&nbsp;</label>
-                    <button class="btn btn-xs" data-action="add-combatant" type="button">Add</button>
+
+                  <hr class="section-divider" />
+
+                  <div class="row">
+                    <div class="col">
+                      <label for="addName">Name</label>
+                      <input id="addName" type="text" placeholder="Vesper, Goblin Scout, Frostclaw Wolf">
+                    </div>
+                    <div class="col" style="max-width:80px;">
+                      <label for="addAc">AC</label>
+                      <input id="addAc" type="number" value="15" min="0">
+                    </div>
+                    <div class="col" style="max-width:100px;">
+                      <label for="addSpeed">Speed (ft)</label>
+                      <input id="addSpeed" type="number" value="30" min="0">
+                    </div>
+                    <div class="col" style="max-width:170px;">
+                      <label>HP (current / max)</label>
+                      <div style="display:flex; gap:4px;">
+                        <input id="addHpCur" type="number" value="27" min="0">
+                        <input id="addHpMax" type="number" value="35" min="0">
+                      </div>
+                    </div>
+                    <div class="col" style="max-width:110px;">
+                      <label for="addType">Type</label>
+                      <select id="addType">
+                        <option>PC</option>
+                        <option>NPC</option>
+                        <option>Enemy</option>
+                      </select>
+                    </div>
+                    <div class="col" style="max-width:90px;">
+                      <label>&nbsp;</label>
+                      <button class="btn btn-xs" data-action="add-combatant" type="button">Add</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1035,7 +1145,35 @@
             <div id="libraryTabContent" class="hidden">
               <div class="section-heading-row">
                 <div class="section-title">Encounter Library</div>
-                <div class="hint-text">Prebuild fights, then load them into the Active view with a single click.</div>
+                <div class="hint-text">Build encounters here, then load them into the Active view with one click.</div>
+              </div>
+
+              <div class="boxed-subsection">
+                <div class="boxed-subsection-header">
+                  <div class="boxed-subsection-title">Create encounter</div>
+                  <span class="hint-text">Save current active combatants or make a blank entry to edit later.</span>
+                </div>
+                <div class="row">
+                  <div class="col">
+                    <label for="libNameInput">Name</label>
+                    <input id="libNameInput" type="text" placeholder="Bandits on the Old Road" />
+                  </div>
+                  <div class="col">
+                    <label for="libTagsInput">Tags</label>
+                    <input id="libTagsInput" type="text" placeholder="3x Bandit · 1x Captain · CR~3" />
+                  </div>
+                  <div class="col">
+                    <label for="libLocationInput">Location</label>
+                    <input id="libLocationInput" type="text" placeholder="Verdant Veil · Old trade route" />
+                  </div>
+                  <div class="col" style="max-width:270px;">
+                    <label>&nbsp;</label>
+                    <div style="display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap;">
+                      <button class="btn btn-xs" data-action="create-from-active" type="button">Save active as encounter</button>
+                      <button class="btn btn-secondary btn-xs" data-action="create-blank-encounter" type="button">Create blank</button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div id="encounterList" class="encounter-list"></div>
@@ -1050,12 +1188,20 @@
     `;
 
     const state = loadState();
+    if (!state.ui || typeof state.ui !== "object") state.ui = {};
+    if (typeof state.ui.addSectionOpen !== "boolean") state.ui.addSectionOpen = true;
+    if (typeof state.ui.partyEditorOpen !== "boolean") state.ui.partyEditorOpen = false;
 
     const refs = {
       roundInput: shadow.getElementById("roundInput"),
       currentTurnInput: shadow.getElementById("currentTurnInput"),
-      savedPartyName: shadow.getElementById("savedPartyName"),
+      partyPresetMeta: shadow.getElementById("partyPresetMeta"),
       partyChipRow: shadow.getElementById("partyChipRow"),
+      partyEditor: shadow.getElementById("partyEditor"),
+      partyNameInput: shadow.getElementById("partyNameInput"),
+      partyEditorList: shadow.getElementById("partyEditorList"),
+      addEditSection: shadow.getElementById("addEditSection"),
+      addSectionChevron: shadow.getElementById("addSectionChevron"),
       addName: shadow.getElementById("addName"),
       addAc: shadow.getElementById("addAc"),
       addSpeed: shadow.getElementById("addSpeed"),
@@ -1064,6 +1210,9 @@
       addType: shadow.getElementById("addType"),
       initiativeList: shadow.getElementById("initiativeList"),
       encounterList: shadow.getElementById("encounterList"),
+      libNameInput: shadow.getElementById("libNameInput"),
+      libTagsInput: shadow.getElementById("libTagsInput"),
+      libLocationInput: shadow.getElementById("libLocationInput"),
       tabActive: shadow.getElementById("tabActive"),
       tabLibrary: shadow.getElementById("tabLibrary"),
       activeTabContent: shadow.getElementById("activeTabContent"),
@@ -1083,20 +1232,70 @@
       refs.currentTurnInput.value = current ? current.name : "—";
     }
 
+    function renderAddSectionState() {
+      const open = !!state.ui.addSectionOpen;
+      refs.addEditSection.classList.toggle("collapsed", !open);
+      refs.addSectionChevron.textContent = open ? "▾" : "▸";
+    }
+
     function renderParty() {
-      refs.savedPartyName.textContent = `Saved party: ${state.savedParty.name}`;
+      refs.partyPresetMeta.textContent = `${state.savedParty.name} (${state.savedParty.members.length})`;
+      refs.partyNameInput.value = state.savedParty.name;
 
       const chips = state.savedParty.members
         .map((member, idx) => {
-          return `<div class="party-chip">${escapeHtml(member.name)} <button data-action="add-party-member" data-party-index="${idx}" title="Add to encounter" type="button">+</button></div>`;
+          return `<div class="party-chip" title="AC ${member.ac} · HP ${member.hpCurrent}/${member.hpMax}">${escapeHtml(member.name)} <button data-action="add-party-member" data-party-index="${idx}" title="Add to encounter" type="button">+</button></div>`;
         })
         .join("");
 
-      refs.partyChipRow.innerHTML = `
-        ${chips}
-        <button class="btn btn-xs" data-action="add-full-party" type="button">Add full party</button>
-        <button class="btn btn-xs" data-action="manage-party" type="button">Manage parties</button>
-      `;
+      refs.partyChipRow.innerHTML = chips || `<span class="hint-text">No members yet. Open Manage party preset to add some.</span>`;
+    }
+
+    function renderPartyEditor() {
+      refs.partyEditor.classList.toggle("hidden", !state.ui.partyEditorOpen);
+
+      if (!state.savedParty.members.length) {
+        refs.partyEditorList.innerHTML = `<div class="initiative-empty">No preset members. Click <strong>+ Add member</strong> to create one.</div>`;
+        return;
+      }
+
+      refs.partyEditorList.innerHTML = state.savedParty.members
+        .map((member, idx) => {
+          return `
+            <div class="party-member-row" data-party-index="${idx}">
+              <div class="field">
+                <label>Name</label>
+                <input data-party-field="name" type="text" value="${escapeHtml(member.name)}" />
+              </div>
+              <div class="field">
+                <label>Type</label>
+                <select data-party-field="type">
+                  <option ${normalizeType(member.type) === "PC" ? "selected" : ""}>PC</option>
+                  <option ${normalizeType(member.type) === "NPC" ? "selected" : ""}>NPC</option>
+                  <option ${normalizeType(member.type) === "Enemy" ? "selected" : ""}>Enemy</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>AC</label>
+                <input data-party-field="ac" type="number" min="0" value="${member.ac}" />
+              </div>
+              <div class="field">
+                <label>Spd</label>
+                <input data-party-field="speed" type="number" min="0" value="${member.speed}" />
+              </div>
+              <div class="field">
+                <label>HP Cur</label>
+                <input data-party-field="hpCurrent" type="number" min="0" value="${member.hpCurrent}" />
+              </div>
+              <div class="field">
+                <label>HP Max</label>
+                <input data-party-field="hpMax" type="number" min="0" value="${member.hpMax}" />
+              </div>
+              <button class="party-remove" data-action="party-remove-member" data-party-index="${idx}" type="button" title="Remove member">×</button>
+            </div>
+          `;
+        })
+        .join("");
     }
 
     function renderCards() {
@@ -1156,20 +1355,25 @@
       wireDragAndDrop();
     }
 
+    function renderLibraryDraftDefaults() {
+      if (!refs.libNameInput.value.trim()) refs.libNameInput.value = `Encounter ${state.library.length + 1}`;
+    }
+
     function renderLibrary() {
       if (!state.library.length) {
-        refs.encounterList.innerHTML = `<div class="initiative-empty">No saved encounters yet.</div>`;
+        refs.encounterList.innerHTML = `<div class="initiative-empty">No saved encounters yet. Use <strong>Save active as encounter</strong> or <strong>Create blank</strong> above.</div>`;
         return;
       }
 
       refs.encounterList.innerHTML = state.library
         .map((entry) => {
+          const count = Array.isArray(entry.combatants) ? entry.combatants.length : 0;
           return `
             <div class="encounter-row" data-encounter-id="${escapeHtml(entry.id)}">
               <div class="encounter-row-header">
                 <div>
                   <div class="encounter-name">${escapeHtml(entry.name)}</div>
-                  <div class="encounter-tags">${escapeHtml(entry.tags || "No tags")}</div>
+                  <div class="encounter-tags">${escapeHtml(entry.tags || "No tags")} · ${count} combatant${count === 1 ? "" : "s"}</div>
                 </div>
                 <span class="hint-text">${escapeHtml(entry.location || "—")}</span>
               </div>
@@ -1178,6 +1382,7 @@
                 <button class="btn btn-secondary btn-xs" data-action="append-encounter" type="button">Append to active</button>
                 <button class="btn btn-secondary btn-xs" data-action="edit-encounter" type="button">Edit</button>
                 <button class="btn btn-secondary btn-xs" data-action="duplicate-encounter" type="button">Duplicate</button>
+                <button class="btn btn-secondary btn-xs" data-action="delete-encounter" type="button">Delete</button>
               </div>
             </div>
           `;
@@ -1243,44 +1448,56 @@
       renderCards();
     }
 
-    function manageParty() {
-      const currentName = state.savedParty.name;
-      const newName = window.prompt("Party name:", currentName);
-      if (newName !== null) {
-        const trimmed = newName.trim();
-        if (trimmed) state.savedParty.name = trimmed;
-      }
+    function addPartyPresetMember() {
+      const index = state.savedParty.members.length + 1;
+      const name = `Member ${index}`;
+      state.savedParty.members.push({
+        name,
+        type: "PC",
+        ac: 15,
+        speed: 30,
+        hpCurrent: 20,
+        hpMax: 20,
+        portrait: toPortrait(name)
+      });
+      persist();
+      renderParty();
+      renderPartyEditor();
+    }
 
-      const currentMembers = state.savedParty.members.map((m) => m.name).join(", ");
-      const namesPrompt = window.prompt(
-        "Party member names (comma separated):",
-        currentMembers
-      );
+    function removePartyPresetMember(index) {
+      if (index < 0 || index >= state.savedParty.members.length) return;
+      state.savedParty.members.splice(index, 1);
+      persist();
+      renderParty();
+      renderPartyEditor();
+    }
 
-      if (namesPrompt !== null) {
-        const names = namesPrompt
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
+    function updatePartyPresetField(index, field, rawValue) {
+      const member = state.savedParty.members[index];
+      if (!member) return;
 
-        if (names.length) {
-          state.savedParty.members = names.map((name, idx) => {
-            const existing = state.savedParty.members[idx] || {};
-            return {
-              name,
-              type: normalizeType(existing.type || "PC"),
-              ac: Math.max(0, asInt(existing.ac, 15)),
-              speed: Math.max(0, asInt(existing.speed, 30)),
-              hpCurrent: Math.max(0, asInt(existing.hpCurrent, 20)),
-              hpMax: Math.max(0, asInt(existing.hpMax, 20)),
-              portrait: toPortrait(name, existing.portrait)
-            };
-          });
-        }
+      if (field === "name") {
+        const newName = String(rawValue || "").trim() || member.name || `Member ${index + 1}`;
+        member.name = newName;
+        member.portrait = toPortrait(newName, member.portrait);
+      } else if (field === "type") {
+        member.type = normalizeType(rawValue);
+      } else if (field === "ac") {
+        member.ac = Math.max(0, asInt(rawValue, member.ac));
+      } else if (field === "speed") {
+        member.speed = Math.max(0, asInt(rawValue, member.speed));
+      } else if (field === "hpCurrent") {
+        member.hpCurrent = Math.max(0, asInt(rawValue, member.hpCurrent));
+        if (member.hpCurrent > member.hpMax) member.hpCurrent = member.hpMax;
+      } else if (field === "hpMax") {
+        member.hpMax = Math.max(0, asInt(rawValue, member.hpMax));
+        if (member.hpCurrent > member.hpMax) member.hpCurrent = member.hpMax;
       }
 
       persist();
       renderParty();
+      renderPartyEditor();
     }
 
     function stepTurn() {
@@ -1362,6 +1579,22 @@
       renderCards();
     }
 
+    function toLibraryCombatant(combatant) {
+      let hpMax = Math.max(0, asInt(combatant.hpMax, 1));
+      let hpCurrent = Math.max(0, asInt(combatant.hpCurrent, hpMax));
+      if (hpCurrent > hpMax) hpCurrent = hpMax;
+
+      return {
+        name: String(combatant.name || "Combatant").trim() || "Combatant",
+        type: normalizeType(combatant.type),
+        ac: Math.max(0, asInt(combatant.ac, 10)),
+        speed: Math.max(0, asInt(combatant.speed, 30)),
+        hpCurrent,
+        hpMax,
+        portrait: toPortrait(combatant.name, combatant.portrait)
+      };
+    }
+
     function cloneEncounterCombatants(combatants) {
       return (combatants || []).map((c) =>
         normalizeCombatant(
@@ -1378,6 +1611,44 @@
           state
         )
       );
+    }
+
+    function createEncounterFromActive() {
+      const name = (refs.libNameInput.value || "").trim() || `Encounter ${state.library.length + 1}`;
+      const tags = (refs.libTagsInput.value || "").trim();
+      const location = (refs.libLocationInput.value || "").trim();
+
+      const combatants = state.activeEncounter.map((c) => toLibraryCombatant(c));
+
+      state.library.unshift({
+        id: nextId(state, "e"),
+        name,
+        tags,
+        location,
+        combatants
+      });
+
+      persist();
+      renderLibrary();
+      refs.libNameInput.value = `${name} Copy`;
+    }
+
+    function createBlankEncounter() {
+      const name = (refs.libNameInput.value || "").trim() || `Encounter ${state.library.length + 1}`;
+      const tags = (refs.libTagsInput.value || "").trim();
+      const location = (refs.libLocationInput.value || "").trim();
+
+      state.library.unshift({
+        id: nextId(state, "e"),
+        name,
+        tags,
+        location,
+        combatants: []
+      });
+
+      persist();
+      renderLibrary();
+      refs.libNameInput.value = `${name} Variant`;
     }
 
     function loadEncounter(encounterId, appendMode) {
@@ -1425,7 +1696,7 @@
       const entry = state.library.find((e) => e.id === encounterId);
       if (!entry) return;
 
-      state.library.push({
+      state.library.unshift({
         id: nextId(state, "e"),
         name: `${entry.name} (Copy)`,
         tags: entry.tags,
@@ -1433,6 +1704,14 @@
         combatants: deepClone(entry.combatants)
       });
 
+      persist();
+      renderLibrary();
+    }
+
+    function deleteEncounter(encounterId) {
+      const idx = state.library.findIndex((e) => e.id === encounterId);
+      if (idx < 0) return;
+      state.library.splice(idx, 1);
       persist();
       renderLibrary();
     }
@@ -1514,6 +1793,20 @@
         return;
       }
 
+      if (action === "toggle-add-section") {
+        state.ui.addSectionOpen = !state.ui.addSectionOpen;
+        persist();
+        renderAddSectionState();
+        return;
+      }
+
+      if (action === "toggle-party-editor") {
+        state.ui.partyEditorOpen = !state.ui.partyEditorOpen;
+        persist();
+        renderPartyEditor();
+        return;
+      }
+
       if (action === "next-turn") {
         stepTurn();
         return;
@@ -1540,8 +1833,14 @@
         return;
       }
 
-      if (action === "manage-party") {
-        manageParty();
+      if (action === "party-add-member") {
+        addPartyPresetMember();
+        return;
+      }
+
+      if (action === "party-remove-member") {
+        const idx = asInt(btn.getAttribute("data-party-index"), -1);
+        removePartyPresetMember(idx);
         return;
       }
 
@@ -1557,6 +1856,16 @@
 
       if (action === "remove-combatant" && card) {
         removeCombatant(card.dataset.id);
+        return;
+      }
+
+      if (action === "create-from-active") {
+        createEncounterFromActive();
+        return;
+      }
+
+      if (action === "create-blank-encounter") {
+        createBlankEncounter();
         return;
       }
 
@@ -1577,6 +1886,11 @@
 
       if (action === "duplicate-encounter" && encounterId) {
         duplicateEncounter(encounterId);
+        return;
+      }
+
+      if (action === "delete-encounter" && encounterId) {
+        deleteEncounter(encounterId);
       }
     });
 
@@ -1593,6 +1907,24 @@
       if (target === refs.addType) {
         const t = normalizeType(refs.addType.value);
         refs.addType.value = t;
+        return;
+      }
+
+      if (target === refs.partyNameInput) {
+        const name = String(target.value || "").trim();
+        state.savedParty.name = name || "Saved Party";
+        persist();
+        renderParty();
+        return;
+      }
+
+      const partyRow = target.closest(".party-member-row");
+      if (partyRow) {
+        const idx = asInt(partyRow.getAttribute("data-party-index"), -1);
+        const field = target.getAttribute("data-party-field");
+        if (idx >= 0 && field) {
+          updatePartyPresetField(idx, field, target.value);
+        }
         return;
       }
 
@@ -1615,8 +1947,11 @@
     });
 
     renderRoundAndTurn();
+    renderAddSectionState();
     renderParty();
+    renderPartyEditor();
     renderCards();
+    renderLibraryDraftDefaults();
     renderLibrary();
     setTab("active");
   }
