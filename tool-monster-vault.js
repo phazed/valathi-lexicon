@@ -993,16 +993,19 @@
     const a = d.abilityScores || defaultAbilities();
 
     const miscRows = [
-      ["Saving Throws", d.savingThrows],
-      ["Skills", d.skills],
-      ["Vulnerabilities", d.damageVulnerabilities],
-      ["Resistances", d.damageResistances],
-      ["Immunities", d.damageImmunities],
-      ["Condition Immunities", d.conditionImmunities],
-      ["Senses", d.senses],
-      ["Languages", d.languages],
-      ["Challenge Notes", d.challengeNote]
-    ].filter(([, value]) => toPlainText(value).trim());
+  ["Saving Throws", d.savingThrows],
+  ["Skills", d.skills],
+  ["Vulnerabilities", d.damageVulnerabilities],
+  ["Resistances", d.damageResistances],
+  ["Immunities", d.damageImmunities],
+  ["Condition Immunities", d.conditionImmunities],
+  ["Senses", d.senses],
+  ["Languages", d.languages],
+  ["Challenge Notes", d.challengeNote]
+]
+  .map(([k, v]) => [k, toPlainText(v)])
+  .filter(([, v]) => v);
+
 
 
     const actionCount =
