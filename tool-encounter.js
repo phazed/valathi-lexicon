@@ -972,13 +972,14 @@
     };
 
     const monsterPicker = {
-      open: false,
-      scope: "active",
-      encounterId: null,
-      query: "",
-      cr: "all",
-      source: "all"
-    };
+  open: false,
+  scope: "active",   // "active" | "library"
+  encounterId: "",
+  query: "",
+  source: "all",     // all | srd | homebrew
+  cr: "all"
+};
+
 
     encounterUiRefreshHook = () => {
       if (monsterPicker.open) render();
@@ -1818,7 +1819,20 @@
     function renderMonsterVaultPickerModal() {
       if (!monsterPicker.open) return "";
 
-      const allMonsters = monsterVaultMonsters();
+      const allMonstersRaw = monsterVaultMonsters();
+const allMonsters = Array.isArray(allMonstersRaw) ? allMonstersRaw : [];
+if (!allMonsters.length) hydrateMonsterVaultIndexCache();
+
+const safeSources = new Set(["all", "srd", "homebrew"]);
+if (!safeSources.has(String(monsterPicker.source || "all"))) {
+  monsterPicker.source = "all";
+}
+
+const safeCR = new Set((monsterVaultIndexCache.crValues || []).map((v) => String(v)));
+if (monsterPicker.cr !== "all" && !safeCR.has(String(monsterPicker.cr))) {
+  monsterPicker.cr = "all";
+}
+
       const query = String(monsterPicker.query || "").trim().toLowerCase();
       const crFilter = String(monsterPicker.cr || "all");
       const sourceFilter = String(monsterPicker.source || "all");
@@ -1827,8 +1841,13 @@
         : [...new Set(allMonsters.map((m) => m.cr).filter(Boolean))].sort((a, b) => crToFloat(a) - crToFloat(b));
 
       const filtered = allMonsters.filter((m) => {
-        if (crFilter !== "all" && m.cr !== crFilter) return false;
-        if (sourceFilter !== "all" && m.sourceType !== sourceFilter) return false;
+       const sourceType =
+  m?.sourceType ||
+  (String(m?.source || "").toLowerCase().includes("homebrew") ? "homebrew" : "srd");
+
+if (sourceFilter !== "all" && sourceType !== sourceFilter) return false;
+if (crFilter !== "all" && String(m?.cr ?? "") !== crFilter) return false;
+
         if (!query) return true;
         const hay = `${m.name} ${m.cr} ${m.sizeType} ${m.source}`.toLowerCase();
         return hay.includes(query);
