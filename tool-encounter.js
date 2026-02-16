@@ -6,8 +6,8 @@
 
   const TOOL_ID = "encounterTool";
   const TOOL_NAME = "Encounter / Initiative";
-  const STORAGE_KEY = "vrahuneEncounterToolStateV7";
-  const LEGACY_KEYS = ["vrahuneEncounterToolStateV6", "vrahuneEncounterToolStateV4", "vrahuneEncounterToolStateV3", "vrahuneEncounterToolStateV2"];
+  const STORAGE_KEY = "vrahuneEncounterToolStateV8";
+  const LEGACY_KEYS = ["vrahuneEncounterToolStateV7", "vrahuneEncounterToolStateV6", "vrahuneEncounterToolStateV4", "vrahuneEncounterToolStateV3", "vrahuneEncounterToolStateV2"];
 
   function uid(prefix = "id") {
     return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}`;
@@ -49,40 +49,37 @@
     "Unconscious"
   ];
 
-  const CONDITION_DETAILS_2024 = {
-    Blinded: "Can't see; automatically fails sight-based checks; attacks against it have Advantage, and its attack rolls have Disadvantage.",
-    Charmed: "Can't attack or target the charmer with damaging effects; the charmer has Advantage on social checks against it.",
-    Deafened: "Can't hear and automatically fails checks that require hearing.",
-    Exhaustion: "Each level gives −2 to D20 Tests and −5 feet Speed; at Exhaustion 6 the creature dies.",
-    Frightened: "Has Disadvantage on checks and attacks while it can see the fear source, and can't willingly move closer to it.",
-    Grappled: "Speed is 0 while grappled (or by the specified grapple effect).",
-    Incapacitated: "Can't take actions, Bonus Actions, or Reactions.",
-    Invisible: "Can't be seen without special senses/magic; attack rolls against it have Disadvantage, and its attack rolls have Advantage.",
-    Paralyzed: "Incapacitated and Speed 0; fails Strength/Dexterity saves; attacks against it have Advantage, and close hits are critical.",
-    Petrified: "Transformed (typically to stone), incapacitated, usually resistant to damage and immune to poison/disease effects.",
-    Poisoned: "Has Disadvantage on attack rolls and ability checks.",
-    Prone: "Limited movement while down; attacks against it have Advantage within 5 feet and Disadvantage from farther away.",
-    Restrained: "Speed is 0; attacks against it have Advantage; its attacks have Disadvantage; it has Disadvantage on Dexterity saves.",
-    Stunned: "Incapacitated and Speed 0; fails Strength/Dexterity saves; attacks against it have Advantage.",
-    Unconscious: "Incapacitated and prone; drops what it's holding; fails Strength/Dexterity saves; attacks against it have Advantage and close hits are critical."
-  };
+const CONDITION_INFO_2024 = {
+  Blinded: "Can’t see, auto-fails sight checks; attacks against it have advantage, and its attacks have disadvantage.",
+  Charmed: "Can’t attack the charmer or target the charmer with harmful effects; charmer has advantage on social checks.",
+  Deafened: "Can’t hear and auto-fails checks that require hearing.",
+  Exhaustion: "Each level gives a cumulative −2 to D20 Tests and −5 ft Speed; level 6 is death.",
+  Frightened: "Has disadvantage on checks and attacks while the source is visible, and can’t willingly move closer.",
+  Grappled: "Speed is 0 while grappled.",
+  Incapacitated: "Can’t take actions, bonus actions, or reactions.",
+  Invisible: "Can’t be seen without special senses/magic; attacks against it have disadvantage and its attacks have advantage.",
+  Paralyzed: "Incapacitated and can’t move/speak; auto-fails Str/Dex saves; nearby hits can crit.",
+  Petrified: "Transformed and incapacitated; usually gains strong resistances and immunities from the effect.",
+  Poisoned: "Has disadvantage on attack rolls and ability checks.",
+  Prone: "Only crawls; has disadvantage on attacks; melee attacks against it usually have advantage.",
+  Restrained: "Speed is 0; attacks against it have advantage; its attacks have disadvantage; Dex saves at disadvantage.",
+  Stunned: "Incapacitated, can’t move/speak, auto-fails Str/Dex saves; attacks against it have advantage.",
+  Unconscious: "Incapacitated and unaware; drops what it holds, falls prone, auto-fails Str/Dex saves; nearby hits can crit."
+};
 
-  const CONDITION_DEFAULT_DURATION_2024 = {
-    Blinded: { amount: 1, unit: "round" },
-    Charmed: null,
-    Deafened: { amount: 1, unit: "round" },
-    Frightened: { amount: 1, unit: "round" },
-    Grappled: null,
-    Incapacitated: { amount: 1, unit: "round" },
-    Invisible: { amount: 1, unit: "round" },
-    Paralyzed: { amount: 1, unit: "round" },
-    Petrified: null,
-    Poisoned: { amount: 1, unit: "round" },
-    Prone: { amount: 1, unit: "turn" },
-    Restrained: { amount: 1, unit: "round" },
-    Stunned: { amount: 1, unit: "round" },
-    Unconscious: null
-  };
+// Convenience defaults. You can override per condition in the modal.
+const CONDITION_DEFAULTS_2024 = {
+  Blinded: { duration: 1, unit: "round" },
+  Charmed: { duration: 1, unit: "round" },
+  Deafened: { duration: 1, unit: "round" },
+  Frightened: { duration: 1, unit: "round" },
+  Incapacitated: { duration: 1, unit: "round" },
+  Paralyzed: { duration: 1, unit: "round" },
+  Poisoned: { duration: 1, unit: "round" },
+  Restrained: { duration: 1, unit: "round" },
+  Stunned: { duration: 1, unit: "round" },
+  Unconscious: { duration: 1, unit: "round" }
+};
 
   const CR_XP_BY_RATING = {
     "0": 0,
@@ -192,36 +189,56 @@
     return hit || "";
   }
 
-  function normalizeDurationUnit(value) {
-    return value === "turn" ? "turn" : "round";
-  }
+  
+function normalizeConditionUnit(value, fallback = "round") {
+  return String(value || "").toLowerCase() === "turn" ? "turn" : fallback;
+}
 
-  function normalizeConditionDuration(name, maybeAmount, maybeUnit) {
-    const duration = Math.max(0, intOr(maybeAmount, 0));
-    const unit = normalizeDurationUnit(maybeUnit);
-
-    if (duration > 0) {
-      return { duration, durationUnit: unit };
+function normalizeConditionDefaults(rawDefaults) {
+  const out = {};
+  const source = rawDefaults && typeof rawDefaults === "object" ? rawDefaults : {};
+  for (const name of CONDITIONS_2024) {
+    if (name === "Exhaustion") continue;
+    const base = CONDITION_DEFAULTS_2024[name] || null;
+    const raw = source[name];
+    if (!raw || typeof raw !== "object") {
+      if (base) out[name] = { duration: Math.max(1, intOr(base.duration, 1)), unit: normalizeConditionUnit(base.unit, "round") };
+      continue;
     }
-
-    return { duration: null, durationUnit: unit };
+    const duration = Math.max(1, intOr(raw.duration, base?.duration || 1));
+    const unit = normalizeConditionUnit(raw.unit, base?.unit || "round");
+    out[name] = { duration, unit };
   }
+  return out;
+}
 
-  function normalizeConditions(rawConditions) {
-    if (!Array.isArray(rawConditions)) return [];
-    const out = [];
-    const seen = new Set();
-    for (const entry of rawConditions) {
-      const name = canonicalConditionName(typeof entry === "string" ? entry : entry?.name);
-      if (!name || name === "Exhaustion" || seen.has(name)) continue;
-      const normalized = normalizeConditionDuration(name, entry?.duration, entry?.durationUnit);
-      out.push({ name, duration: normalized.duration, durationUnit: normalized.durationUnit });
-      seen.add(name);
-    }
-    return out;
+function normalizeConditions(rawConditions) {
+  if (!Array.isArray(rawConditions)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const entry of rawConditions) {
+    const name = canonicalConditionName(typeof entry === "string" ? entry : entry?.name);
+    if (!name || name === "Exhaustion" || seen.has(name)) continue;
+    const durationRaw = intOr(entry?.duration, 0);
+    const duration = durationRaw > 0 ? durationRaw : null;
+    const unit = duration ? normalizeConditionUnit(entry?.unit, "round") : "round";
+    out.push({ name, duration, unit });
+    seen.add(name);
   }
+  return out;
+}
 
-  function exhaustionEffects(level) {
+function conditionDurationShort(cond) {
+  if (!cond || !cond.duration || cond.duration <= 0) return "";
+  const unit = normalizeConditionUnit(cond.unit, "round");
+  return `${cond.duration}${unit === "turn" ? "t" : "r"}`;
+}
+
+function conditionTooltip(name) {
+  return CONDITION_INFO_2024[name] || "";
+}
+
+function exhaustionEffects(level) {
     const lv = clamp(intOr(level, 0), 0, 6);
     if (!lv) return "No exhaustion penalties.";
     const d20Penalty = lv * 2;
@@ -348,6 +365,7 @@
       createTags: "",
       createLocation: "",
       libraryEditId: null,
+      conditionDefaults: normalizeConditionDefaults(),
       // add form for active
       addDraft: {
         name: "",
@@ -380,8 +398,7 @@
         location: "",
         combatants: [],
         addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10, level: 3, cr: "1" }
-      },
-      conditionDurationDefaults: {}
+      }
     };
   }
 
@@ -447,6 +464,8 @@
       state.libraryEditId = null;
     }
 
+    state.conditionDefaults = normalizeConditionDefaults(state.conditionDefaults);
+
     state.addDraft = {
       name: String(state.addDraft?.name || ""),
       type: ["PC", "NPC", "Enemy"].includes(state.addDraft?.type) ? state.addDraft.type : "NPC",
@@ -491,25 +510,6 @@
         cr: normalizeCR(ed.addDraft?.cr, "1")
       }
     };
-
-    const rawConditionDefaults =
-      state.conditionDurationDefaults && typeof state.conditionDurationDefaults === "object"
-        ? state.conditionDurationDefaults
-        : {};
-    const normalizedConditionDefaults = {};
-    Object.keys(rawConditionDefaults).forEach((key) => {
-      const name = canonicalConditionName(key);
-      if (!name || name === "Exhaustion") return;
-      const cfg = rawConditionDefaults[key];
-      if (!cfg || typeof cfg !== "object") return;
-      const amount = Math.max(0, intOr(cfg.amount, 0));
-      if (!amount) return;
-      normalizedConditionDefaults[name] = {
-        amount: Math.max(1, amount),
-        unit: normalizeDurationUnit(cfg.unit)
-      };
-    });
-    state.conditionDurationDefaults = normalizedConditionDefaults;
 
     return state;
   }
@@ -650,76 +650,47 @@
       render();
     }
 
-    function getConditionDescription(name) {
-      return CONDITION_DETAILS_2024[name] || "";
-    }
 
-    function getConditionDurationDefault(name) {
-      const fromState = state.conditionDurationDefaults?.[name];
-      if (fromState && Number.isFinite(fromState.amount) && fromState.amount > 0) {
-        return { amount: Math.max(1, intOr(fromState.amount, 1)), unit: normalizeDurationUnit(fromState.unit) };
-      }
-      const fallback = CONDITION_DEFAULT_DURATION_2024[name];
-      if (fallback && Number.isFinite(fallback.amount) && fallback.amount > 0) {
-        return { amount: Math.max(1, intOr(fallback.amount, 1)), unit: normalizeDurationUnit(fallback.unit) };
-      }
-      return null;
-    }
+function getConditionDefault(name) {
+  const canonical = canonicalConditionName(name);
+  if (!canonical || canonical === "Exhaustion") return null;
+  const stored = state.conditionDefaults?.[canonical];
+  const base = CONDITION_DEFAULTS_2024[canonical] || null;
+  const src = stored && typeof stored === "object" ? stored : base;
+  if (!src) return null;
+  return {
+    duration: Math.max(1, intOr(src.duration, 1)),
+    unit: normalizeConditionUnit(src.unit, "round")
+  };
+}
 
-    function rememberConditionDurationDefault(name, amount, unit) {
-      if (!name || name === "Exhaustion") return;
-      const n = Math.max(0, intOr(amount, 0));
-      if (!n) {
-        if (state.conditionDurationDefaults?.[name]) {
-          delete state.conditionDurationDefaults[name];
+function updateConditionDefault(name, duration, unit) {
+  const canonical = canonicalConditionName(name);
+  if (!canonical || canonical === "Exhaustion") return;
+  const dur = Math.max(1, intOr(duration, 1));
+  const normalizedUnit = normalizeConditionUnit(unit, "round");
+  if (!state.conditionDefaults || typeof state.conditionDefaults !== "object") {
+    state.conditionDefaults = normalizeConditionDefaults();
+  }
+  state.conditionDefaults[canonical] = { duration: dur, unit: normalizedUnit };
+}
+
+function stepConditionDurations(unit) {
+  const normalizedUnit = normalizeConditionUnit(unit, "round");
+  state.activeCombatants.forEach((c) => {
+    c.conditions = (c.conditions || [])
+      .map((cond) => {
+        const duration = intOr(cond?.duration, 0);
+        const condUnit = normalizeConditionUnit(cond?.unit, "round");
+        if (!duration || duration <= 0 || condUnit !== normalizedUnit) {
+          return { ...cond, duration: duration > 0 ? duration : null, unit: condUnit };
         }
-        return;
-      }
-      state.conditionDurationDefaults = state.conditionDurationDefaults || {};
-      state.conditionDurationDefaults[name] = {
-        amount: Math.max(1, n),
-        unit: normalizeDurationUnit(unit)
-      };
-    }
-
-    function formatConditionDuration(cond) {
-      if (!cond || !cond.duration) return "";
-      const unit = normalizeDurationUnit(cond.durationUnit);
-      return `${cond.duration}${unit === "turn" ? "t" : "r"}`;
-    }
-
-    function decrementConditionDurations(unit, steps = 1) {
-      const mode = normalizeDurationUnit(unit);
-      const ticks = Math.max(1, intOr(steps, 1));
-      let changed = false;
-
-      state.activeCombatants.forEach((c) => {
-        const next = [];
-        (c.conditions || []).forEach((cond) => {
-          const normalizedUnit = normalizeDurationUnit(cond.durationUnit);
-          if (!cond.duration || cond.duration <= 0 || normalizedUnit !== mode) {
-            next.push({ ...cond, durationUnit: normalizedUnit });
-            return;
-          }
-
-          const remaining = Math.max(0, intOr(cond.duration, 0) - ticks);
-          if (remaining > 0) {
-            next.push({ ...cond, duration: remaining, durationUnit: normalizedUnit });
-          }
-          changed = true;
-        });
-
-        if (next.length !== (c.conditions || []).length || (c.conditions || []).some((oldCond, i) => {
-          const newCond = next[i];
-          if (!newCond) return true;
-          return oldCond.name !== newCond.name || oldCond.duration !== newCond.duration || normalizeDurationUnit(oldCond.durationUnit) !== normalizeDurationUnit(newCond.durationUnit);
-        })) {
-          c.conditions = normalizeConditions(next);
-        }
-      });
-
-      return changed;
-    }
+        const next = duration - 1;
+        return next > 0 ? { ...cond, duration: next, unit: condUnit } : null;
+      })
+      .filter(Boolean);
+  });
+}
 
     function toggleCondition(cardId, conditionName) {
       const c = getActiveCombatantById(cardId);
@@ -729,11 +700,11 @@
       if (idx >= 0) {
         c.conditions.splice(idx, 1);
       } else {
-        const defaultDuration = getConditionDurationDefault(name);
+        const preset = getConditionDefault(name);
         c.conditions.push({
           name,
-          duration: defaultDuration?.amount || null,
-          durationUnit: defaultDuration?.unit || "round"
+          duration: preset?.duration ?? null,
+          unit: preset?.unit || "round"
         });
       }
       c.conditions = normalizeConditions(c.conditions);
@@ -746,33 +717,28 @@
       if (!c || !name || name === "Exhaustion") return;
       const entry = c.conditions.find((x) => x.name === name);
       if (!entry) return;
-
       const trimmed = String(rawValue ?? "").trim();
       if (!trimmed) {
         entry.duration = null;
-        rememberConditionDurationDefault(name, 0, entry.durationUnit || "round");
       } else {
-        const n = Math.max(1, intOr(trimmed, entry.duration || 1));
+        const n = Math.max(1, intOr(trimmed, entry.duration || getConditionDefault(name)?.duration || 1));
         entry.duration = n;
-        rememberConditionDurationDefault(name, n, entry.durationUnit || "round");
+        updateConditionDefault(name, n, entry.unit || "round");
       }
-
       saveState(state);
       render();
     }
 
-    function setConditionDurationUnit(cardId, conditionName, rawUnit) {
+    function setConditionUnit(cardId, conditionName, rawUnit) {
       const c = getActiveCombatantById(cardId);
       const name = canonicalConditionName(conditionName);
       if (!c || !name || name === "Exhaustion") return;
       const entry = c.conditions.find((x) => x.name === name);
       if (!entry) return;
-
-      entry.durationUnit = normalizeDurationUnit(rawUnit);
+      entry.unit = normalizeConditionUnit(rawUnit, "round");
       if (entry.duration && entry.duration > 0) {
-        rememberConditionDurationDefault(name, entry.duration, entry.durationUnit);
+        updateConditionDefault(name, entry.duration, entry.unit);
       }
-
       saveState(state);
       render();
     }
@@ -803,12 +769,12 @@
     function renderConditionBadges(c) {
       const chips = [];
       (c.conditions || []).forEach((cond) => {
-        const durationTag = formatConditionDuration(cond);
-        const label = durationTag ? `${cond.name} · ${durationTag}` : cond.name;
-        chips.push(`<span class="condition-chip" title="${esc(getConditionDescription(cond.name))}">${esc(label)}</span>`);
+        const suffix = conditionDurationShort(cond);
+        const label = suffix ? `${cond.name} · ${suffix}` : cond.name;
+        chips.push(`<span class="condition-chip" title="${esc(conditionTooltip(cond.name))}">${esc(label)}</span>`);
       });
       if ((c.exhaustionLevel || 0) > 0) {
-        chips.push(`<span class="condition-chip exhaustion" title="${esc(getConditionDescription("Exhaustion"))}">Exhaustion ${c.exhaustionLevel}</span>`);
+        chips.push(`<span class="condition-chip exhaustion" title="${esc(conditionTooltip("Exhaustion"))}">Exhaustion ${c.exhaustionLevel}</span>`);
       }
       if (!chips.length) return "";
       return `<div class="condition-row">${chips.join("")}</div>`;
@@ -840,21 +806,21 @@
 
       if (!partyCount || !enemyCount) {
         tier = !partyCount ? "Add PCs/NPCs with levels" : "Add enemies with CR";
+      } else if (enemyXP < budget.low) {
+        tier = "Below Low";
+        tierClass = "tier-below";
       } else if (enemyXP <= budget.low) {
-        tier = "Low Difficulty";
+        tier = "Low";
         tierClass = "tier-low";
       } else if (enemyXP <= budget.moderate) {
-        tier = "Moderate Difficulty";
+        tier = "Moderate";
         tierClass = "tier-moderate";
       } else if (enemyXP <= budget.high) {
-        tier = "High Difficulty";
+        tier = "High";
         tierClass = "tier-high";
-      } else if (enemyXP <= budget.high * 1.5) {
-        tier = "Beyond High Difficulty";
-        tierClass = "tier-above";
       } else {
-        tier = "Far Beyond High";
-        tierClass = "tier-extreme";
+        tier = "Over High";
+        tierClass = "tier-over";
       }
 
       const pctOfHigh = budget.high > 0 ? Math.round((enemyXP / budget.high) * 100) : 0;
@@ -1360,30 +1326,28 @@
       const conditionButtons = CONDITIONS_2024.filter((name) => name !== "Exhaustion")
         .map((name) => {
           const active = combatant.conditions.some((c) => c.name === name);
-          const desc = getConditionDescription(name);
-          const defaultCfg = getConditionDurationDefault(name);
-          const defaultText = defaultCfg ? ` Default: ${defaultCfg.amount} ${defaultCfg.unit}${defaultCfg.amount === 1 ? "" : "s"}.` : " Default: no timer.";
-          return `<button type="button" class="condition-toggle ${active ? "active" : ""}" data-cond-toggle="${esc(name)}" title="${esc(`${desc}${defaultText}`.trim())}">${esc(name)}</button>`;
+          const preset = getConditionDefault(name);
+          const presetSuffix = preset ? ` · ${preset.duration}${preset.unit === "turn" ? "t" : "r"}` : "";
+          return `<button type="button" class="condition-toggle ${active ? "active" : ""}" data-cond-toggle="${esc(name)}" title="${esc(conditionTooltip(name))}">${esc(name + presetSuffix)}</button>`;
         })
         .join("");
 
       const activeRows = combatant.conditions.length
         ? combatant.conditions
-            .map((cond) => {
-              const unit = normalizeDurationUnit(cond.durationUnit);
-              return `
+            .map(
+              (cond) => `
                 <div class="condition-active-row">
-                  <span class="condition-active-name" title="${esc(getConditionDescription(cond.name))}">${esc(cond.name)}</span>
+                  <span class="condition-active-name" title="${esc(conditionTooltip(cond.name))}">${esc(cond.name)}</span>
                   <label>Duration</label>
-                  <input type="number" min="1" data-cond-duration="${esc(cond.name)}" value="${cond.duration || ""}" placeholder="∞" title="Leave empty for no timer">
-                  <select data-cond-duration-unit="${esc(cond.name)}" title="Countdown unit">
-                    <option value="round" ${unit === "round" ? "selected" : ""}>Rounds</option>
-                    <option value="turn" ${unit === "turn" ? "selected" : ""}>Turns</option>
+                  <input type="number" min="1" data-cond-duration="${esc(cond.name)}" value="${cond.duration || ""}" placeholder="∞">
+                  <select data-cond-unit="${esc(cond.name)}" ${cond.duration ? "" : "disabled"}>
+                    <option value="round" ${normalizeConditionUnit(cond.unit, "round") === "round" ? "selected" : ""}>Rounds</option>
+                    <option value="turn" ${normalizeConditionUnit(cond.unit, "round") === "turn" ? "selected" : ""}>Turns</option>
                   </select>
                   <button class="btn btn-secondary btn-xs" type="button" data-cond-remove="${esc(cond.name)}">Remove</button>
                 </div>
-              `;
-            })
+              `
+            )
             .join("")
         : `<div class="hint-text">No non-exhaustion conditions on this combatant.</div>`;
 
@@ -1392,10 +1356,8 @@
           <div class="condition-editor-modal" role="dialog" aria-modal="true" aria-label="Condition editor">
             <div class="condition-editor-head">
               <div class="portrait-editor-title">Conditions — ${esc(combatant.name)}</div>
-              <div class="hint-text">Active encounter only • 2024 condition list</div>
+              <div class="hint-text">Active encounter only • hover names for rules text • durations auto-tick by rounds/turns.</div>
             </div>
-
-            <div class="hint-text">Tip: set a duration once and that condition remembers it as the default next time.</div>
 
             <div class="condition-picker-grid">
               ${conditionButtons}
@@ -1595,8 +1557,6 @@
                     </div>
                   </div>
 
-                  ${renderConditionBadges(c)}
-
                   <div class="card-meta">
                     <div class="card-meta-top">
                       <div class="meta-init-center">
@@ -1631,6 +1591,7 @@
                       </div>
                       <button class="btn-icon" title="Remove" data-remove-card="${esc(c.id)}">×</button>
                     </div>
+                    ${renderConditionBadges(c)}
                   </div>
                 </div>
               </div>
@@ -1799,10 +1760,10 @@ function renderLibraryTab() {
                   <div class="difficulty-fill ${builderDifficulty.tierClass}" style="width:${Math.min(100, builderDifficulty.pctOfHigh)}%"></div>
                 </div>
                 <div class="difficulty-legend">
-                  <span>Low Difficulty ${builderDifficulty.budget.low.toLocaleString()}</span>
-                  <span>Moderate Difficulty ${builderDifficulty.budget.moderate.toLocaleString()}</span>
-                  <span>High Difficulty ${builderDifficulty.budget.high.toLocaleString()}</span>
-                  <span>${builderDifficulty.pctOfHigh}% of High budget</span>
+                  <span>Low ${builderDifficulty.budget.low.toLocaleString()}</span>
+                  <span>Moderate ${builderDifficulty.budget.moderate.toLocaleString()}</span>
+                  <span>High ${builderDifficulty.budget.high.toLocaleString()}</span>
+                  <span>${builderDifficulty.pctOfHigh}% of High</span>
                 </div>
               </div>
             </div>
@@ -2264,13 +2225,11 @@ function renderEditorModal() {
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(128px,1.2fr) minmax(290px,1.1fr) minmax(112px,0.85fr);
-          grid-template-areas:
-            "name hp meta"
-            "conds conds conds";
+          grid-template-columns: minmax(140px,1.15fr) minmax(280px,1.05fr) minmax(150px,0.95fr);
+          grid-template-areas: "name hp meta";
           align-items: center;
-          column-gap: 6px;
-          row-gap: 3px;
+          column-gap: 8px;
+          row-gap: 2px;
         }
 
         .name-block {
@@ -2278,7 +2237,6 @@ function renderEditorModal() {
           grid-area: name;
           display: flex;
           justify-content: flex-start;
-          padding-left: 2px;
         }
         .name-row {
           display: flex;
@@ -2286,7 +2244,7 @@ function renderEditorModal() {
           justify-content: flex-start;
           gap: 6px;
           min-width: 0;
-          width: 100%;
+          width: auto;
         }
 
         .card-name {
@@ -2687,14 +2645,21 @@ function renderEditorModal() {
         }
 
         .condition-row {
-          grid-area: conds;
-          margin-top: 0;
+          margin-top: 2px;
           display: flex;
-          flex-wrap: wrap;
+          flex-wrap: nowrap;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-end;
           gap: 4px;
           min-height: 0;
+          width: 100%;
+          max-width: 240px;
+          overflow-x: auto;
+          scrollbar-width: thin;
+        }
+
+        .card-meta .condition-row {
+          align-self: flex-end;
         }
 
         .condition-chip {
@@ -2791,7 +2756,7 @@ function renderEditorModal() {
 
         .condition-active-row {
           display: grid;
-          grid-template-columns: minmax(80px, 1fr) auto minmax(70px, 88px) minmax(78px, 95px) auto;
+          grid-template-columns: minmax(80px, 1fr) auto minmax(72px, 92px) minmax(88px, 110px) auto;
           gap: 6px;
           align-items: center;
         }
@@ -2808,14 +2773,13 @@ function renderEditorModal() {
           text-transform: uppercase;
           letter-spacing: 0.03em;
         }
-
         .condition-active-row select {
           width: 100%;
-          min-width: 0;
-          padding: 5px 6px;
+          min-width: 88px;
           font-size: 0.72rem;
-          border-radius: 8px;
+          padding: 5px 6px;
         }
+
 
         .difficulty-summary {
           display: flex;
@@ -2844,11 +2808,11 @@ function renderEditorModal() {
         }
 
         .tier-none { border-color: #4d5562; color: #d0d7e2; }
+        .tier-below { border-color: #3a5a68; color: #b6e7ff; background: #081822; }
         .tier-low { border-color: #2f6b56; color: #b7ffe2; background: #082117; }
         .tier-moderate { border-color: #5d6f33; color: #e4f2b8; background: #1a220b; }
         .tier-high { border-color: #8b6d2d; color: #ffe5aa; background: #261b08; }
-        .tier-above { border-color: #8b4f2d; color: #ffd1ad; background: #2a1308; }
-        .tier-extreme { border-color: #8f2e2e; color: #ffc7c7; background: #2b0b0b; }
+        .tier-over { border-color: #8f2e2e; color: #ffc7c7; background: #2b0b0b; }
 
         .difficulty-track {
           position: relative;
@@ -2868,13 +2832,16 @@ function renderEditorModal() {
           background: linear-gradient(90deg, #3b8f7a, #8f8d3b);
         }
 
-        .difficulty-fill.tier-high,
-        .difficulty-fill.tier-above {
+        .difficulty-fill.tier-high {
           background: linear-gradient(90deg, #8f7c3b, #8f503b);
         }
 
-        .difficulty-fill.tier-extreme {
+        .difficulty-fill.tier-over {
           background: linear-gradient(90deg, #8f4f3b, #8f2f3b);
+        }
+
+        .difficulty-fill.tier-below {
+          background: linear-gradient(90deg, #3b6b8f, #2f5577);
         }
 
         .difficulty-threshold {
@@ -2904,15 +2871,14 @@ function renderEditorModal() {
             grid-template-areas:
               "name"
               "hp"
-              "meta"
-              "conds";
+              "meta";
             row-gap: 4px;
           }
           .name-block,
           .name-row { justify-content: center; }
           .card-meta { justify-self: center; align-items: center; }
           .hp-block { justify-self: center; }
-          .condition-row { justify-content: center; }
+          .condition-row { justify-content: center; max-width: 100%; }
         }
 
         .encounter-row.editing {
@@ -3237,11 +3203,11 @@ function renderEditorModal() {
       if (nextTurnBtn) {
         nextTurnBtn.addEventListener("click", () => {
           if (!state.activeCombatants.length) return;
-          decrementConditionDurations("turn", 1);
           state.turnIndex = (state.turnIndex + 1) % state.activeCombatants.length;
+          stepConditionDurations("turn");
           if (state.turnIndex === 0) {
             state.round += 1;
-            decrementConditionDurations("round", 1);
+            stepConditionDurations("round");
           }
           persistAndRender();
         });
@@ -3252,7 +3218,7 @@ function renderEditorModal() {
         nextRoundBtn.addEventListener("click", () => {
           state.round += 1;
           state.turnIndex = 0;
-          decrementConditionDurations("round", 1);
+          stepConditionDurations("round");
           persistAndRender();
         });
       }
@@ -3555,13 +3521,16 @@ function renderEditorModal() {
         input.addEventListener("input", () => {
           if (!conditionEditor.cardId) return;
           setConditionDuration(conditionEditor.cardId, input.getAttribute("data-cond-duration"), input.value);
+          const key = input.getAttribute("data-cond-duration");
+          const unitSelect = key ? shadow.querySelector(`[data-cond-unit="${CSS.escape(key)}"]`) : null;
+          if (unitSelect) unitSelect.disabled = !String(input.value || "").trim();
         });
       });
 
-      shadow.querySelectorAll("[data-cond-duration-unit]").forEach((select) => {
+      shadow.querySelectorAll("[data-cond-unit]").forEach((select) => {
         select.addEventListener("change", () => {
           if (!conditionEditor.cardId) return;
-          setConditionDurationUnit(conditionEditor.cardId, select.getAttribute("data-cond-duration-unit"), select.value);
+          setConditionUnit(conditionEditor.cardId, select.getAttribute("data-cond-unit"), select.value);
         });
       });
 
