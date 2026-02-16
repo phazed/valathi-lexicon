@@ -593,7 +593,8 @@
                 <div class="card-content">
                   <div class="name-block">
                     <div class="name-row">
-                      <input class="card-name-input" data-card-field="name" data-card-id="${esc(c.id)}" value="${esc(c.name)}" />
+                      <button type="button" class="card-name-display" data-card-name-display data-card-id="${esc(c.id)}">${esc(c.name)}</button>
+                      <input class="card-name-edit-input" data-card-name-input data-card-id="${esc(c.id)}" value="${esc(c.name)}" />
                       <select class="card-type-input" data-card-field="type" data-card-id="${esc(c.id)}">
                         <option ${c.type === "PC" ? "selected" : ""}>PC</option>
                         <option ${c.type === "NPC" ? "selected" : ""}>NPC</option>
@@ -617,12 +618,20 @@
 
                   <div class="card-meta">
                     <div class="card-meta-top">
-                      <span>Init:</span>
-                      <input class="tiny-num" type="number" min="0" data-card-field="initiative" data-card-id="${esc(c.id)}" value="${intOr(c.initiative, 0)}">
-                      <span>AC:</span>
-                      <input class="tiny-num" type="number" min="0" data-card-field="ac" data-card-id="${esc(c.id)}" value="${c.ac}">
-                      <span>Spd:</span>
-                      <input class="tiny-num" type="number" min="0" data-card-field="speed" data-card-id="${esc(c.id)}" value="${c.speed}">
+                      <div class="meta-group meta-init-group">
+                        <span>Init</span>
+                        <input class="tiny-num" type="number" min="0" data-card-field="initiative" data-card-id="${esc(c.id)}" value="${intOr(c.initiative, 0)}">
+                      </div>
+                      <div class="meta-stack">
+                        <div class="meta-group">
+                          <span>AC</span>
+                          <input class="tiny-num" type="number" min="0" data-card-field="ac" data-card-id="${esc(c.id)}" value="${c.ac}">
+                        </div>
+                        <div class="meta-group">
+                          <span>Spd</span>
+                          <input class="tiny-num" type="number" min="0" data-card-field="speed" data-card-id="${esc(c.id)}" value="${c.speed}">
+                        </div>
+                      </div>
                       <button class="btn-icon" title="Remove" data-remove-card="${esc(c.id)}">×</button>
                     </div>
                   </div>
@@ -707,7 +716,8 @@ function renderLibraryTab() {
                     <div class="card-content">
                       <div class="name-block">
                         <div class="name-row">
-                          <input class="card-name-input" data-lib-card-field="name" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${esc(c.name)}" />
+                          <button type="button" class="card-name-display" data-lib-card-name-display data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">${esc(c.name)}</button>
+                          <input class="card-name-edit-input" data-lib-card-name-input data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${esc(c.name)}" />
                           <select class="card-type-input" data-lib-card-field="type" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">
                             <option ${c.type === "PC" ? "selected" : ""}>PC</option>
                             <option ${c.type === "NPC" ? "selected" : ""}>NPC</option>
@@ -723,12 +733,20 @@ function renderLibraryTab() {
                       </div>
                       <div class="card-meta">
                         <div class="card-meta-top">
-                          <span>Init:</span>
-                          <input class="tiny-num" type="number" min="0" data-lib-card-field="initiative" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${intOr(c.initiative, 0)}">
-                          <span>AC:</span>
-                          <input class="tiny-num" type="number" min="0" data-lib-card-field="ac" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.ac}">
-                          <span>Spd:</span>
-                          <input class="tiny-num" type="number" min="0" data-lib-card-field="speed" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.speed}">
+                          <div class="meta-group meta-init-group">
+                            <span>Init</span>
+                            <input class="tiny-num" type="number" min="0" data-lib-card-field="initiative" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${intOr(c.initiative, 0)}">
+                          </div>
+                          <div class="meta-stack">
+                            <div class="meta-group">
+                              <span>AC</span>
+                              <input class="tiny-num" type="number" min="0" data-lib-card-field="ac" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.ac}">
+                            </div>
+                            <div class="meta-group">
+                              <span>Spd</span>
+                              <input class="tiny-num" type="number" min="0" data-lib-card-field="speed" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.speed}">
+                            </div>
+                          </div>
                           <button class="btn-icon" title="Remove" data-lib-remove-card="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">×</button>
                         </div>
                       </div>
@@ -1121,11 +1139,12 @@ function renderEditorModal() {
         .card {
           border-radius: 10px;
           border: 1px solid #222832;
-          padding: 4px 6px;
+          padding: 8px 10px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 6px;
           cursor: grab;
+          min-height: 94px;
         }
 
         .card.dragging { opacity: 0.45; }
@@ -1134,12 +1153,12 @@ function renderEditorModal() {
         .enemy-card { background: linear-gradient(120deg, #16090d, #05070c); border-color: #4a2028; }
         .npc-card { background: linear-gradient(120deg, #101010, #05070c); border-color: #33363f; }
 
-        .card-main { display: flex; align-items: center; gap: 8px; }
+        .card-main { display: flex; align-items: flex-start; gap: 10px; }
 
         .card-portrait {
           flex-shrink: 0;
-          width: 40px;
-          height: 40px;
+          width: 44px;
+          height: 44px;
           border-radius: 999px;
           border: 1px solid #323949;
           background: radial-gradient(circle at top left, #2a3244, #05070c);
@@ -1148,7 +1167,7 @@ function renderEditorModal() {
           justify-content: center;
           color: var(--accent-strong);
           font-weight: 600;
-          font-size: 0.9rem;
+          font-size: 0.94rem;
           cursor: default;
         }
 
@@ -1156,43 +1175,70 @@ function renderEditorModal() {
 
         .card-content {
           flex: 1;
-          display: grid;
-          grid-template-columns: minmax(140px,1.7fr) auto minmax(120px,1.1fr);
-          align-items: center;
-          column-gap: 8px;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 7px;
+          min-width: 0;
         }
 
         .name-block { min-width: 0; }
-        .name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .name-row { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
 
-                .card-name-input {
+        .card-name-display {
+          appearance: none;
+          -webkit-appearance: none;
+          border: none;
+          background: transparent;
+          color: #eef3ff;
+          font-weight: 640;
+          font-size: 0.9rem;
+          letter-spacing: 0.01em;
+          padding: 2px 0;
           min-width: 0;
+          flex: 1;
+          text-align: left;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          cursor: text;
+        }
+
+        .card-name-display:hover { color: #ffffff; }
+
+        .card-name-edit-input {
+          display: none;
+          min-width: 0;
+          flex: 1;
           font-weight: 640;
           font-size: 0.87rem;
           letter-spacing: 0.01em;
-          padding: 3px 8px;
+          padding: 4px 8px;
           border-radius: 8px;
-          background: rgba(8, 12, 18, 0.7) !important;
+          background: rgba(8, 12, 18, 0.78) !important;
           border: 1px solid #2f3746;
           color: #eef3ff;
           appearance: none;
           -webkit-appearance: none;
         }
 
-        .card-name-input:hover {
+        .card.editing-name .card-name-display { display: none; }
+        .card.editing-name .card-name-edit-input { display: block; }
+
+        .card-name-edit-input:hover {
           background: #0d121a !important;
           border-color: #3c4658;
         }
 
-        .card-name-input:focus {
+        .card-name-edit-input:focus {
           background: #0f1520 !important;
           border-color: #7281a0;
           box-shadow: 0 0 0 1px rgba(140,155,180,0.25);
         }
 
-        .card-name-input:-webkit-autofill,
-        .card-name-input:-webkit-autofill:hover,
-        .card-name-input:-webkit-autofill:focus {
+        .card-name-edit-input:-webkit-autofill,
+        .card-name-edit-input:-webkit-autofill:hover,
+        .card-name-edit-input:-webkit-autofill:focus {
           -webkit-text-fill-color: #eef3ff;
           -webkit-box-shadow: 0 0 0px 1000px #0b0f16 inset;
           transition: background-color 9999s ease-out 0s;
@@ -1209,11 +1255,10 @@ function renderEditorModal() {
         }
 
         .hp-block {
-          display: inline-flex;
+          display: flex;
+          flex-wrap: wrap;
           align-items: center;
-          justify-content: center;
-          gap: 4px;
-          justify-self: center;
+          gap: 5px;
           min-width: 0;
         }
 
@@ -1228,8 +1273,8 @@ function renderEditorModal() {
         }
 
         .hp-amount-input {
-          width: 42px !important;
-          min-width: 42px;
+          width: 46px !important;
+          min-width: 46px;
           padding: 3px 4px !important;
           font-size: 0.72rem;
           text-align: center;
@@ -1239,22 +1284,55 @@ function renderEditorModal() {
           display: flex;
           align-items: center;
           gap: 4px;
-          margin-left: 4px;
+          margin-left: 2px;
           white-space: nowrap;
         }
 
         .card-meta {
           display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 2px;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
           font-size: 0.8rem;
-          white-space: nowrap;
           font-weight: 500;
-          justify-self: end;
+          width: 100%;
+          min-width: 0;
         }
 
-        .card-meta-top { display: flex; align-items: center; gap: 4px; }
+        .card-meta-top {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          width: 100%;
+        }
+
+        .meta-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          white-space: nowrap;
+        }
+
+        .meta-group span {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+        }
+
+        .meta-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          margin-top: -1px;
+        }
+
+        .meta-init-group {
+          min-width: 106px;
+        }
+
+        .card-meta-top .btn-icon {
+          margin-left: auto;
+          align-self: center;
+        }
 
         .card.active-turn {
           border-color: #c0c0c0;
@@ -1366,10 +1444,18 @@ function renderEditorModal() {
           padding: 0 2px;
         }
 
-        @media (max-width: 860px) {
-          .card-content { grid-template-columns: 1fr; row-gap: 4px; }
-          .card-meta { justify-self: start; align-items: flex-start; }
-          .hp-block { justify-self: start; }
+        @media (max-width: 980px) {
+          .card-main { align-items: flex-start; }
+          .card-meta-top {
+            flex-wrap: wrap;
+            row-gap: 5px;
+          }
+          .meta-init-group {
+            min-width: 0;
+          }
+          .hp-buttons {
+            margin-left: 0;
+          }
         }
 
         .encounter-row.editing {
@@ -1614,6 +1700,57 @@ function renderEditorModal() {
         });
       });
 
+
+      // inline name edit (active cards)
+      shadow.querySelectorAll("[data-card-name-display]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const card = btn.closest(".card");
+          if (!card) return;
+          card.classList.add("editing-name");
+          const input = card.querySelector("[data-card-name-input]");
+          if (input) {
+            input.focus();
+            input.select();
+          }
+        });
+      });
+
+      shadow.querySelectorAll("[data-card-name-input]").forEach((input) => {
+        const commit = () => {
+          const id = input.getAttribute("data-card-id");
+          const c = state.activeCombatants.find((x) => x.id === id);
+          const card = input.closest(".card");
+          if (!c) {
+            card?.classList.remove("editing-name");
+            return;
+          }
+          const next = (input.value || "").trim() || c.name || "Combatant";
+          if (next !== c.name) {
+            c.name = next;
+            persistAndRender();
+            return;
+          }
+          card?.classList.remove("editing-name");
+          saveState(state);
+        };
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            input.blur();
+          } else if (e.key === "Escape") {
+            const id = input.getAttribute("data-card-id");
+            const c = state.activeCombatants.find((x) => x.id === id);
+            if (c) input.value = c.name;
+            const card = input.closest(".card");
+            card?.classList.remove("editing-name");
+            input.blur();
+          }
+        });
+
+        input.addEventListener("blur", commit);
+      });
+
       // card edits
       shadow.querySelectorAll("[data-card-field]").forEach((el) => {
         el.addEventListener("input", () => {
@@ -1786,6 +1923,61 @@ function renderEditorModal() {
       enc[field] = el.value;
       saveState(state);
     });
+  });
+
+
+  // inline name edit (library cards)
+  shadow.querySelectorAll("[data-lib-card-name-display]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest(".card");
+      if (!card) return;
+      card.classList.add("editing-name");
+      const input = card.querySelector("[data-lib-card-name-input]");
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+  });
+
+  shadow.querySelectorAll("[data-lib-card-name-input]").forEach((input) => {
+    const commit = () => {
+      const encId = input.getAttribute("data-lib-enc-id");
+      const cardId = input.getAttribute("data-lib-card-id");
+      const enc = state.library.find((e) => e.id === encId);
+      const c = enc?.combatants?.find((x) => x.id === cardId);
+      const card = input.closest(".card");
+      if (!c) {
+        card?.classList.remove("editing-name");
+        return;
+      }
+      const next = (input.value || "").trim() || c.name || "Combatant";
+      if (next !== c.name) {
+        c.name = next;
+        persistAndRender();
+        return;
+      }
+      card?.classList.remove("editing-name");
+      saveState(state);
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === "Escape") {
+        const encId = input.getAttribute("data-lib-enc-id");
+        const cardId = input.getAttribute("data-lib-card-id");
+        const enc = state.library.find((x) => x.id === encId);
+        const c = enc?.combatants?.find((x) => x.id === cardId);
+        if (c) input.value = c.name;
+        const card = input.closest(".card");
+        card?.classList.remove("editing-name");
+        input.blur();
+      }
+    });
+
+    input.addEventListener("blur", commit);
   });
 
   shadow.querySelectorAll("[data-lib-card-field]").forEach((el) => {
