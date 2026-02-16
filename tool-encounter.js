@@ -1,3 +1,4 @@
+// encounter-fix-r3
 // tool-encounter.js
 // Encounter / Initiative tool for Vrahune Toolbox
 (function () {
@@ -207,59 +208,124 @@
   }
 
   function monsterVaultApi() {
-    const api = window.VrahuneMonsterVault;
-    if (!api || typeof api !== "object") return null;
-    if (typeof api.getAllMonsters !== "function" && typeof api.getMonsterIndex !== "function") return null;
-    return api;
+    const candidates = [
+      window.VrahuneMonsterVault,
+      window.MonsterVault,
+      window.vrahuneMonsterVault
+    ];
+    for (const candidate of candidates) {
+      if (candidate && typeof candidate === "object") return candidate;
+    }
+    return null;
+  }
+
+  function pickArrayish(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== "object") return [];
+    const buckets = [
+      payload.monsters,
+      payload.items,
+      payload.data,
+      payload.results,
+      payload.list
+    ];
+    for (const bucket of buckets) {
+      if (Array.isArray(bucket)) return bucket;
+    }
+    return [];
+  }
+
+  function getVaultRawList(api) {
+    if (!api || typeof api !== "object") return [];
+    const attempts = [
+      () => (typeof api.getMonsterIndex === "function" ? api.getMonsterIndex() : null),
+      () => (typeof api.getAllMonsters === "function" ? api.getAllMonsters() : null),
+      () => (typeof api.searchMonsters === "function" ? api.searchMonsters("") : null)
+    ];
+
+    for (const fn of attempts) {
+      try {
+        const value = fn();
+        const arr = pickArrayish(value);
+        if (arr.length) return arr;
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  function toEncounterFromRawMonster(rawMonster, fallbackId = null) {
+    const src = rawMonster && typeof rawMonster === "object" ? rawMonster : {};
+    const details = src.details && typeof src.details === "object" ? JSON.parse(JSON.stringify(src.details)) : null;
+    return {
+      id: uid("c"),
+      name: String(src.name || "Monster"),
+      type: ["PC", "NPC", "Enemy"].includes(src.type) ? src.type : "Enemy",
+      ac: Math.max(0, intOr(src.ac, 10)),
+      hpCurrent: Math.max(1, intOr(src.hpCurrent ?? src.hpMax ?? src.hp, 1)),
+      hpMax: Math.max(1, intOr(src.hpMax ?? src.hp ?? src.hpCurrent, 1)),
+      speed: Math.max(0, intOr(src.speed, 30)),
+      initiative: Math.max(0, intOr(src.initiative, 10)),
+      level: src.type === "Enemy" ? 1 : 3,
+      cr: normalizeCR(src.cr, "1/8"),
+      sourceMonsterId: String(src.id || fallbackId || ""),
+      sourceMonsterName: String(src.name || ""),
+      source: src.isHomebrew ? "Homebrew" : String(src.source || "SRD 2024"),
+      xp: Math.max(0, intOr(src.xp, 0)),
+      sizeType: String(src.sizeType || ""),
+      details,
+      traits: JSON.parse(JSON.stringify(src.traits || details?.traits || [])),
+      actions: JSON.parse(JSON.stringify(src.actions || details?.actions || [])),
+      bonusActions: JSON.parse(JSON.stringify(src.bonusActions || details?.bonusActions || [])),
+      reactions: JSON.parse(JSON.stringify(src.reactions || details?.reactions || [])),
+      legendaryActions: JSON.parse(JSON.stringify(src.legendaryActions || details?.legendaryActions || [])),
+      conditions: []
+    };
   }
 
   function hasMonsterVaultApi() {
-    return !!monsterVaultApi();
+    const api = monsterVaultApi();
+    if (!api) return false;
+    return getVaultRawList(api).length > 0;
+  }
+
+  const monsterVaultIndexCache = {
+    list: [],
+    crValues: [],
+    ready: false
+  };
+
+  function resetMonsterVaultCache() {
+    monsterVaultIndexCache.list = [];
+    monsterVaultIndexCache.crValues = [];
+    monsterVaultIndexCache.ready = false;
   }
 
   function monsterVaultMonsters(forceRefresh = false) {
     const api = monsterVaultApi();
     if (!api) {
-      resetMonsterVaultCache?.();
+      resetMonsterVaultCache();
       return [];
     }
 
-    if (!forceRefresh && typeof monsterVaultIndexCache === "object" && monsterVaultIndexCache.ready) {
-      return monsterVaultIndexCache.list || [];
+    if (!forceRefresh && monsterVaultIndexCache.ready) {
+      return monsterVaultIndexCache.list;
     }
 
     try {
-      const indexRaw = typeof api.getMonsterIndex === "function" ? api.getMonsterIndex() : null;
-      const allRaw = typeof api.getAllMonsters === "function" ? api.getAllMonsters() : null;
-
-      const pickArray = (value) => {
-        if (Array.isArray(value)) return value;
-        if (value && typeof value === "object") {
-          if (Array.isArray(value.monsters)) return value.monsters;
-          if (Array.isArray(value.items)) return value.items;
-        }
-        return [];
-      };
-
-      let rawList = pickArray(indexRaw);
-      if (!rawList.length) rawList = pickArray(allRaw);
-
-      const list = rawList
-        .filter(Boolean)
+      const raw = getVaultRawList(api);
+      const list = (raw || [])
         .map((m) => {
-          const sourceLabelRaw = String(m.source || m.sourceLabel || "").toLowerCase();
-          const sourceTypeRaw = String(m.sourceType || "").toLowerCase();
-          const isHomebrew = sourceTypeRaw === "homebrew" || !!m.isHomebrew || sourceLabelRaw.includes("homebrew");
+          const sourceType = m.sourceType
+            ? String(m.sourceType).toLowerCase()
+            : (m.isHomebrew || /homebrew/i.test(String(m.source || "")) ? "homebrew" : "srd");
+          const source = sourceType === "homebrew" ? "Homebrew" : String(m.source || "SRD 2024");
+          const details = m.details && typeof m.details === "object" ? m.details : null;
           const actionsCount =
-            intOr(m.actionsCount, -1) >= 0
-              ? Math.max(0, intOr(m.actionsCount, 0))
-              : Math.max(
-                  0,
-                  intOr(Array.isArray(m.actions) ? m.actions.length : 0, 0) +
-                    intOr(Array.isArray(m.bonusActions) ? m.bonusActions.length : 0, 0) +
-                    intOr(Array.isArray(m.reactions) ? m.reactions.length : 0, 0) +
-                    intOr(Array.isArray(m.legendaryActions) ? m.legendaryActions.length : 0, 0)
-                );
+            Math.max(0, intOr(m.actionsCount, 0)) ||
+            ((details?.actions?.length || 0) +
+              (details?.bonusActions?.length || 0) +
+              (details?.reactions?.length || 0) +
+              (details?.legendaryActions?.length || 0));
 
           return {
             id: String(m.id || ""),
@@ -267,37 +333,38 @@
             type: ["PC", "NPC", "Enemy"].includes(m.type) ? m.type : "Enemy",
             cr: normalizeCR(m.cr, "1/8"),
             ac: Math.max(0, intOr(m.ac, 10)),
-            hp: Math.max(1, intOr(m.hp ?? m.hpMax, 1)),
+            hp: Math.max(1, intOr(m.hp ?? m.hpMax ?? m.hpCurrent, 1)),
             speed: Math.max(0, intOr(m.speed, 30)),
             initiative: Math.max(0, intOr(m.initiative, 10)),
-            source: isHomebrew ? "Homebrew" : "SRD 2024",
-            sourceType: isHomebrew ? "homebrew" : "srd",
-            sizeType: String(m.sizeType || m.size || ""),
+            source,
+            sourceType,
+            sizeType: String(m.sizeType || ""),
             actionsCount
           };
         })
         .filter((m) => m.id && m.name);
 
       const crValues = [...new Set(list.map((m) => m.cr).filter(Boolean))].sort((a, b) => crToFloat(a) - crToFloat(b));
-      if (typeof monsterVaultIndexCache === "object") {
-        monsterVaultIndexCache.list = list;
-        monsterVaultIndexCache.crValues = crValues;
-        monsterVaultIndexCache.ready = true;
-      }
+      monsterVaultIndexCache.list = list;
+      monsterVaultIndexCache.crValues = crValues;
+      monsterVaultIndexCache.ready = true;
       return list;
     } catch (_) {
-      resetMonsterVaultCache?.();
+      resetMonsterVaultCache();
       return [];
     }
   }
 
   function hasMonsterDetails(c) {
-
     if (!c || c.type !== "Enemy") return false;
     return [c.traits, c.actions, c.bonusActions, c.reactions, c.legendaryActions].some((arr) => Array.isArray(arr) && arr.length);
   }
 
   window.addEventListener("vrahune-monster-vault-updated", () => {
+    resetMonsterVaultCache();
+    if (monsterPicker.open) render();
+  });
+  window.addEventListener("vrahune-monster-vault-ready", () => {
     resetMonsterVaultCache();
     if (monsterPicker.open) render();
   });
@@ -730,55 +797,34 @@
       const api = monsterVaultApi();
       if (!api || !monsterId) return;
 
-      const normalizeFromRaw = (raw) => {
-        if (!raw || typeof raw !== "object") return null;
-        return {
-          id: String(raw.id || monsterId),
-          name: String(raw.name || "Unnamed Monster"),
-          type: ["PC", "NPC", "Enemy"].includes(raw.type) ? raw.type : "Enemy",
-          initiative: Math.max(0, intOr(raw.initiative, 10)),
-          ac: Math.max(0, intOr(raw.ac, 10)),
-          speed: Math.max(0, intOr(raw.speed, 30)),
-          hpMax: Math.max(1, intOr(raw.hpMax ?? raw.hp, 1)),
-          hpCurrent: Math.max(0, intOr(raw.hpCurrent ?? raw.hpMax ?? raw.hp, 1)),
-          level: intOr(raw.level, 1),
-          cr: normalizeCR(raw.cr, "1"),
-          conditions: Array.isArray(raw.conditions) ? raw.conditions : [],
-          sourceMonsterId: String(raw.id || monsterId),
-          sourceMonsterName: String(raw.name || "Unnamed Monster"),
-          source: String(raw.source || ""),
-          xp: Math.max(0, intOr(raw.xp, raw.cr ? crToXP(raw.cr) : 0)),
-          sizeType: String(raw.sizeType || raw.size || ""),
-          details: raw.details && typeof raw.details === "object" ? JSON.parse(JSON.stringify(raw.details)) : null,
-          traits: Array.isArray(raw.traits) ? JSON.parse(JSON.stringify(raw.traits)) : [],
-          actions: Array.isArray(raw.actions) ? JSON.parse(JSON.stringify(raw.actions)) : [],
-          bonusActions: Array.isArray(raw.bonusActions) ? JSON.parse(JSON.stringify(raw.bonusActions)) : [],
-          reactions: Array.isArray(raw.reactions) ? JSON.parse(JSON.stringify(raw.reactions)) : [],
-          legendaryActions: Array.isArray(raw.legendaryActions) ? JSON.parse(JSON.stringify(raw.legendaryActions)) : []
-        };
-      };
-
       let created = null;
-      try {
-        if (typeof api.toEncounterCombatant === "function") {
-          created = api.toEncounterCombatant(monsterId);
-        }
-      } catch (_) {
-        created = null;
-      }
 
-      if (!created) {
+      if (typeof api.toEncounterCombatant === "function") {
         try {
-          if (typeof api.getMonsterById === "function") {
-            created = normalizeFromRaw(api.getMonsterById(monsterId));
-          }
-          if (!created && typeof api.getAllMonsters === "function") {
-            const fromList = (api.getAllMonsters() || []).find((m) => String(m?.id || "") === String(monsterId));
-            created = normalizeFromRaw(fromList);
-          }
+          created = api.toEncounterCombatant(monsterId);
         } catch (_) {
           created = null;
         }
+      }
+
+      if (!created && typeof api.getMonsterById === "function") {
+        try {
+          const rawMonster = api.getMonsterById(monsterId);
+          if (rawMonster) created = toEncounterFromRawMonster(rawMonster, monsterId);
+        } catch (_) {}
+      }
+
+      if (!created) {
+        const indexed = monsterVaultMonsters().find((m) => String(m.id) === String(monsterId)) || null;
+        if (indexed) {
+          created = toEncounterFromRawMonster(indexed, monsterId);
+        }
+      }
+
+      if (!created) {
+        const allRaw = getVaultRawList(api);
+        const rawMonster = allRaw.find((m) => String(m?.id || "") === String(monsterId));
+        if (rawMonster) created = toEncounterFromRawMonster(rawMonster, monsterId);
       }
 
       if (!created) {
@@ -790,6 +836,7 @@
       if (created.hp != null && created.hpMax == null) created.hpMax = created.hp;
       if (created.hpMax != null && created.hpCurrent == null) created.hpCurrent = created.hpMax;
       if (created.initiative == null) created.initiative = 10;
+      created.id = uid("c");
 
       const next = mkCombatant(created);
       if (monsterPicker.scope === "library") {
@@ -807,8 +854,8 @@
       persistAndRender();
     }
 
-    function getActiveCombatantById(cardId) {
 
+    function getActiveCombatantById(cardId) {
       return state.activeCombatants.find((c) => c.id === cardId) || null;
     }
 
@@ -1619,7 +1666,7 @@
                         `
                       )
                       .join("")
-                  : `<div class="hint-text" style="padding:8px;">${hasMonsterVaultApi() ? "No monsters match your filters." : "Monster Vault API not found. Open the Monster Vault tab once, then reopen this picker."}</div>`
+                  : `<div class="hint-text" style="padding:8px;">${hasMonsterVaultApi() ? "No monsters match your filters." : "Monster Vault data unavailable (hard refresh if needed)."}</div>`
               }
             </div>
 
