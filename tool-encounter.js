@@ -335,7 +335,7 @@
                 (details?.legendaryActions?.length || 0));
 
             return {
-              id: String(m?.id || ""),
+              id: String(m?.id || m?.index || m?.slug || m?.monsterId || m?.monster_id || (typeof m?.url === "string" ? m.url.split("/").filter(Boolean).pop() : "") || "").trim(),
               name: String(m?.name || "Unnamed Monster"),
               type: ["PC", "NPC", "Enemy"].includes(m?.type) ? m.type : "Enemy",
               cr: normalizeCR(m?.cr, "1/8"),
@@ -413,7 +413,7 @@
       initiative: Math.max(0, intOr(src.initiative, 10)),
       level: src.type === "Enemy" ? 1 : 3,
       cr: normalizeCR(src.cr, "1/8"),
-      sourceMonsterId: String(src.id || fallbackId || ""),
+      sourceMonsterId: String(src?.id || src?.index || src?.slug || src?.monsterId || src?.monster_id || (typeof src?.url === "string" ? src.url.split("/").filter(Boolean).pop() : "") || fallbackId || ""),
       sourceMonsterName: String(src.name || ""),
       source: src.isHomebrew ? "Homebrew" : String(src.source || "SRD 2024"),
       xp: Math.max(0, intOr(src.xp, 0)),
@@ -476,7 +476,7 @@
                 (details?.legendaryActions?.length || 0));
 
             return {
-              id: String(m.id || ""),
+              id: String(m?.id || m?.index || m?.slug || m?.monsterId || m?.monster_id || (typeof m?.url === "string" ? m.url.split("/").filter(Boolean).pop() : "") || "").trim(),
               name: String(m.name || "Unnamed Monster"),
               type: ["PC", "NPC", "Enemy"].includes(m.type) ? m.type : "Enemy",
               cr: normalizeCR(m.cr, "1/8"),
@@ -1039,7 +1039,7 @@
 
       if (!created) {
         const allRaw = getVaultRawList(api);
-        const rawMonster = allRaw.find((m) => String(m?.id || "") === String(monsterId));
+        const rawMonster = allRaw.find((m) => String(m?.id || m?.index || m?.slug || m?.monsterId || m?.monster_id || (typeof m?.url === "string" ? m.url.split("/").filter(Boolean).pop() : "") || "").trim() === String(monsterId));
         if (rawMonster) created = toEncounterFromRawMonster(rawMonster, monsterId);
       }
 
