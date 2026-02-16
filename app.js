@@ -688,17 +688,34 @@ function renderToolsNav() {
   }
 }
 
-// Core tool rendering – text cleaner + dice roller.
-// Additional tools can extend this by wrapping window.renderToolPanel later.
-window.renderToolPanel = function renderToolPanel(toolId) {
+// Core tool rendering – text cleaner + dice roller, BUT first
+// we let any registered tool (via window.registerTool) render itself.
+function renderToolPanel(toolId) {
   const label = document.getElementById("activeGeneratorLabel");
   const panel = document.getElementById("generatorPanel");
+  if (!label || !panel) return;
+
+  // Reset panel
   panel.innerHTML = "";
   panel.removeEventListener("click", handleCopyClick);
 
+  // 1) If a registered tool exists, let it render itself.
+  const renderer =
+    window.toolRenderers && typeof window.toolRenderers[toolId] === "function"
+      ? window.toolRenderers[toolId]
+      : null;
+
+  if (renderer) {
+    // Most tools will want the label + panel to work with
+    renderer({ labelEl: label, panelEl: panel });
+    return;
+  }
+
+  // 2) Fallback: built-in tools (textCleaner, diceRoller) live here.
   const tool = window.toolsConfig.find((t) => t.id === toolId);
   label.textContent = tool ? tool.name : "Tool";
 
+  // --- Built-in Text Cleaner fallback ---
   if (toolId === "textCleaner") {
     panel.innerHTML = `
       <div class="muted" style="margin-bottom:4px;">
@@ -759,6 +776,7 @@ window.renderToolPanel = function renderToolPanel(toolId) {
     return;
   }
 
+  // --- Built-in Dice Roller fallback ---
   if (toolId === "diceRoller") {
     panel.innerHTML = `
       <div class="muted" style="margin-bottom:4px;">
@@ -862,8 +880,8 @@ window.renderToolPanel = function renderToolPanel(toolId) {
           const other = chosen === first ? second : first;
           const seg1 = formatTermSegments(first.terms);
           const seg2 = formatTermSegments(second.terms);
-          const label = advMode === "adv" ? "adv" : "dis";
-          const line = `${expr} (${label}) = ${chosen.total} [${first.total} (${seg1}) vs ${second.total} (${seg2})]`;
+          const labelMode = advMode === "adv" ? "adv" : "dis";
+          const line = `${expr} (${labelMode}) = ${chosen.total} [${first.total} (${seg1}) vs ${second.total} (${seg2})]`;
           addHistoryLine(line);
         }
       } catch (err) {
@@ -908,8 +926,10 @@ window.renderToolPanel = function renderToolPanel(toolId) {
     return;
   }
 
+  // 3) If nothing matches:
   panel.innerHTML = `<div class="muted">Tool not implemented yet.</div>`;
 }
+
 
 function renderMainPanel() {
   const label = document.getElementById("activeGeneratorLabel");
