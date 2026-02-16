@@ -1002,7 +1002,8 @@
       ["Senses", d.senses],
       ["Languages", d.languages],
       ["Challenge Notes", d.challengeNote]
-    ].filter(([, value]) => String(value || "").trim());
+    ].filter(([, value]) => toPlainText(value).trim());
+
 
     const actionCount =
       (d.actions?.length || 0) +
