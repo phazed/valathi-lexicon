@@ -6,8 +6,8 @@
 
   const TOOL_ID = "encounterTool";
   const TOOL_NAME = "Encounter / Initiative";
-  const STORAGE_KEY = "vrahuneEncounterToolStateV8";
-  const LEGACY_KEYS = ["vrahuneEncounterToolStateV7", "vrahuneEncounterToolStateV6", "vrahuneEncounterToolStateV4", "vrahuneEncounterToolStateV3", "vrahuneEncounterToolStateV2"];
+  const STORAGE_KEY = "vrahuneEncounterToolStateV7";
+  const LEGACY_KEYS = ["vrahuneEncounterToolStateV6", "vrahuneEncounterToolStateV4", "vrahuneEncounterToolStateV3", "vrahuneEncounterToolStateV2"];
 
   function uid(prefix = "id") {
     return `${prefix}_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36)}`;
@@ -31,221 +31,53 @@
     return Math.max(min, Math.min(max, n));
   }
 
-  const CONDITIONS_2024 = [
-    "Blinded",
-    "Charmed",
-    "Deafened",
-    "Exhaustion",
-    "Frightened",
-    "Grappled",
-    "Incapacitated",
-    "Invisible",
-    "Paralyzed",
-    "Petrified",
-    "Poisoned",
-    "Prone",
-    "Restrained",
-    "Stunned",
-    "Unconscious"
-  ];
-
-const CONDITION_INFO_2024 = {
-  Blinded: "Can’t see, auto-fails sight checks; attacks against it have advantage, and its attacks have disadvantage.",
-  Charmed: "Can’t attack the charmer or target the charmer with harmful effects; charmer has advantage on social checks.",
-  Deafened: "Can’t hear and auto-fails checks that require hearing.",
-  Exhaustion: "Each level gives a cumulative −2 to D20 Tests and −5 ft Speed; level 6 is death.",
-  Frightened: "Has disadvantage on checks and attacks while the source is visible, and can’t willingly move closer.",
-  Grappled: "Speed is 0 while grappled.",
-  Incapacitated: "Can’t take actions, bonus actions, or reactions.",
-  Invisible: "Can’t be seen without special senses/magic; attacks against it have disadvantage and its attacks have advantage.",
-  Paralyzed: "Incapacitated and can’t move/speak; auto-fails Str/Dex saves; nearby hits can crit.",
-  Petrified: "Transformed and incapacitated; usually gains strong resistances and immunities from the effect.",
-  Poisoned: "Has disadvantage on attack rolls and ability checks.",
-  Prone: "Only crawls; has disadvantage on attacks; melee attacks against it usually have advantage.",
-  Restrained: "Speed is 0; attacks against it have advantage; its attacks have disadvantage; Dex saves at disadvantage.",
-  Stunned: "Incapacitated, can’t move/speak, auto-fails Str/Dex saves; attacks against it have advantage.",
-  Unconscious: "Incapacitated and unaware; drops what it holds, falls prone, auto-fails Str/Dex saves; nearby hits can crit."
-};
-
-// Convenience defaults. You can override per condition in the modal.
-const CONDITION_DEFAULTS_2024 = {
-  Blinded: { duration: 1, unit: "round" },
-  Charmed: { duration: 1, unit: "round" },
-  Deafened: { duration: 1, unit: "round" },
-  Frightened: { duration: 1, unit: "round" },
-  Incapacitated: { duration: 1, unit: "round" },
-  Paralyzed: { duration: 1, unit: "round" },
-  Poisoned: { duration: 1, unit: "round" },
-  Restrained: { duration: 1, unit: "round" },
-  Stunned: { duration: 1, unit: "round" },
-  Unconscious: { duration: 1, unit: "round" }
-};
-
-  const CR_XP_BY_RATING = {
-    "0": 0,
-    "1/8": 25,
-    "1/4": 50,
-    "1/2": 100,
-    "1": 200,
-    "2": 450,
-    "3": 700,
-    "4": 1100,
-    "5": 1800,
-    "6": 2300,
-    "7": 2900,
-    "8": 3900,
-    "9": 5000,
-    "10": 5900,
-    "11": 7200,
-    "12": 8400,
-    "13": 10000,
-    "14": 11500,
-    "15": 13000,
-    "16": 15000,
-    "17": 18000,
-    "18": 20000,
-    "19": 22000,
-    "20": 25000,
-    "21": 33000,
-    "22": 41000,
-    "23": 50000,
-    "24": 62000,
-    "25": 75000,
-    "26": 90000,
-    "27": 105000,
-    "28": 120000,
-    "29": 135000,
-    "30": 155000
-  };
-
-  const XP_BUDGET_2024_BY_LEVEL = {
-    1: { low: 50, moderate: 75, high: 100 },
-    2: { low: 100, moderate: 150, high: 200 },
-    3: { low: 150, moderate: 225, high: 400 },
-    4: { low: 250, moderate: 375, high: 500 },
-    5: { low: 500, moderate: 750, high: 1100 },
-    6: { low: 600, moderate: 1000, high: 1400 },
-    7: { low: 750, moderate: 1300, high: 1700 },
-    8: { low: 1000, moderate: 1700, high: 2100 },
-    9: { low: 1300, moderate: 2000, high: 2600 },
-    10: { low: 1600, moderate: 2300, high: 3100 },
-    11: { low: 1900, moderate: 2900, high: 4100 },
-    12: { low: 2200, moderate: 3700, high: 4700 },
-    13: { low: 2600, moderate: 4200, high: 5400 },
-    14: { low: 2900, moderate: 4900, high: 6200 },
-    15: { low: 3300, moderate: 5400, high: 7800 },
-    16: { low: 3800, moderate: 6100, high: 9800 },
-    17: { low: 4500, moderate: 7200, high: 11700 },
-    18: { low: 5000, moderate: 8700, high: 14200 },
-    19: { low: 5500, moderate: 10700, high: 17200 },
-    20: { low: 6400, moderate: 13200, high: 22000 }
-  };
-
-  function normalizeLevel(value, fallback = 1) {
-    return clamp(Math.max(1, intOr(value, fallback)), 1, 20);
+  function monsterVaultApi() {
+    const api = window.VrahuneMonsterVault;
+    if (!api || typeof api.getAllMonsters !== "function") return null;
+    return api;
   }
 
-  function normalizeCR(value, fallback = "0") {
-    const raw = String(value ?? "").trim();
-    if (!raw) return fallback;
-
-    const direct = raw.toLowerCase().replace(/\s+/g, "");
-    if (direct === "1/8" || direct === "1/4" || direct === "1/2") return direct;
-    if (/^\d+$/.test(direct)) {
-      const n = clamp(intOr(direct, 0), 0, 30);
-      return String(n);
-    }
-    const fractionMatch = direct.match(/^(\d+)\/(\d+)$/);
-    if (fractionMatch) {
-      const num = Number(fractionMatch[1]);
-      const den = Number(fractionMatch[2]);
-      if (den > 0) {
-        const v = num / den;
-        if (v <= 0.125) return "1/8";
-        if (v <= 0.25) return "1/4";
-        if (v <= 0.5) return "1/2";
-        const n = clamp(Math.round(v), 0, 30);
-        return String(n);
-      }
+  function monsterVaultMonsters() {
+    const api = monsterVaultApi();
+    if (!api) return [];
+    let list = [];
+    try {
+      list = api.getAllMonsters() || [];
+    } catch (err) {
+      console.warn("Encounter tool: failed reading Monster Vault", err);
+      return [];
     }
 
-    const n = Number(direct);
-    if (!Number.isFinite(n)) return fallback;
-    if (n <= 0) return "0";
-    if (n <= 0.125) return "1/8";
-    if (n <= 0.25) return "1/4";
-    if (n <= 0.5) return "1/2";
-    return String(clamp(Math.round(n), 0, 30));
+    return list
+      .map((m) => ({
+        id: String(m?.id || ""),
+        name: String(m?.name || "Unnamed").trim() || "Unnamed",
+        cr: String(m?.cr ?? "—"),
+        source: String(m?.source || (m?.isHomebrew ? "Homebrew" : "Monster Vault")),
+        sizeType: String(m?.sizeType || ""),
+        type: ["PC", "NPC", "Enemy"].includes(m?.type) ? m.type : "Enemy",
+        initiative: Math.max(0, intOr(m?.initiative, 10)),
+        ac: Math.max(0, intOr(m?.ac, 13)),
+        hp: Math.max(1, intOr(m?.hp ?? m?.hpMax, 10)),
+        speed: Math.max(0, intOr(m?.speed, 30))
+      }))
+      .filter((m) => m.id)
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  function crToXP(cr) {
-    return CR_XP_BY_RATING[normalizeCR(cr, "0")] || 0;
-  }
-
-  function canonicalConditionName(value) {
-    const s = String(value || "").trim().toLowerCase();
-    if (!s) return "";
-    const hit = CONDITIONS_2024.find((c) => c.toLowerCase() === s);
-    return hit || "";
-  }
-
-  
-function normalizeConditionUnit(value, fallback = "round") {
-  return String(value || "").toLowerCase() === "turn" ? "turn" : fallback;
-}
-
-function normalizeConditionDefaults(rawDefaults) {
-  const out = {};
-  const source = rawDefaults && typeof rawDefaults === "object" ? rawDefaults : {};
-  for (const name of CONDITIONS_2024) {
-    if (name === "Exhaustion") continue;
-    const base = CONDITION_DEFAULTS_2024[name] || null;
-    const raw = source[name];
-    if (!raw || typeof raw !== "object") {
-      if (base) out[name] = { duration: Math.max(1, intOr(base.duration, 1)), unit: normalizeConditionUnit(base.unit, "round") };
-      continue;
+  function crToFloat(cr) {
+    if (!cr || cr === "—") return -1;
+    const s = String(cr).trim();
+    if (!s) return -1;
+    if (s.includes("/")) {
+      const [a, b] = s.split("/");
+      const num = Number(a);
+      const den = Number(b);
+      if (Number.isFinite(num) && Number.isFinite(den) && den !== 0) return num / den;
+      return -1;
     }
-    const duration = Math.max(1, intOr(raw.duration, base?.duration || 1));
-    const unit = normalizeConditionUnit(raw.unit, base?.unit || "round");
-    out[name] = { duration, unit };
-  }
-  return out;
-}
-
-function normalizeConditions(rawConditions) {
-  if (!Array.isArray(rawConditions)) return [];
-  const out = [];
-  const seen = new Set();
-  for (const entry of rawConditions) {
-    const name = canonicalConditionName(typeof entry === "string" ? entry : entry?.name);
-    if (!name || name === "Exhaustion" || seen.has(name)) continue;
-    const durationRaw = intOr(entry?.duration, 0);
-    const duration = durationRaw > 0 ? durationRaw : null;
-    const unit = duration ? normalizeConditionUnit(entry?.unit, "round") : "round";
-    out.push({ name, duration, unit });
-    seen.add(name);
-  }
-  return out;
-}
-
-function conditionDurationShort(cond) {
-  if (!cond || !cond.duration || cond.duration <= 0) return "";
-  const unit = normalizeConditionUnit(cond.unit, "round");
-  return `${cond.duration}${unit === "turn" ? "t" : "r"}`;
-}
-
-function conditionTooltip(name) {
-  return CONDITION_INFO_2024[name] || "";
-}
-
-function exhaustionEffects(level) {
-    const lv = clamp(intOr(level, 0), 0, 6);
-    if (!lv) return "No exhaustion penalties.";
-    const d20Penalty = lv * 2;
-    const speedPenalty = lv * 5;
-    return lv >= 6
-      ? `Level ${lv}: D20 tests −${d20Penalty}, Speed −${speedPenalty} ft, and the creature dies.`
-      : `Level ${lv}: D20 tests −${d20Penalty}, Speed −${speedPenalty} ft.`;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : -1;
   }
 
   function normalizePortrait(value) {
@@ -260,10 +92,10 @@ function exhaustionEffects(level) {
         id: uid("party"),
         name: "Frostclaw Cell",
         members: [
-          { id: uid("m"), name: "Vesper", type: "PC", level: 5, ac: 16, speed: 30, hpCurrent: 27, hpMax: 35 },
-          { id: uid("m"), name: "Arelix", type: "PC", level: 5, ac: 15, speed: 30, hpCurrent: 31, hpMax: 31 },
-          { id: uid("m"), name: "Lirael", type: "PC", level: 5, ac: 14, speed: 30, hpCurrent: 24, hpMax: 24 },
-          { id: uid("m"), name: "Thamar", type: "PC", level: 5, ac: 18, speed: 25, hpCurrent: 39, hpMax: 39 }
+          { id: uid("m"), name: "Vesper", type: "PC", ac: 16, speed: 30, hpCurrent: 27, hpMax: 35 },
+          { id: uid("m"), name: "Arelix", type: "PC", ac: 15, speed: 30, hpCurrent: 31, hpMax: 31 },
+          { id: uid("m"), name: "Lirael", type: "PC", ac: 14, speed: 30, hpCurrent: 24, hpMax: 24 },
+          { id: uid("m"), name: "Thamar", type: "PC", ac: 18, speed: 25, hpCurrent: 39, hpMax: 39 }
         ]
       }
     ];
@@ -274,7 +106,6 @@ function exhaustionEffects(level) {
     const hpCurrent = clamp(intOr(raw.hpCurrent, hpMax), 0, hpMax);
     const type = ["PC", "NPC", "Enemy"].includes(raw.type) ? raw.type : "NPC";
     const initiative = Math.max(0, intOr(raw.initiative, 10));
-    const levelDefault = type === "Enemy" ? 1 : 3;
 
     return {
       id: raw.id || uid("c"),
@@ -285,10 +116,6 @@ function exhaustionEffects(level) {
       speed: Math.max(0, intOr(raw.speed, 30)),
       hpCurrent,
       hpMax,
-      level: normalizeLevel(raw.level, levelDefault),
-      cr: normalizeCR(raw.cr, type === "Enemy" ? "1" : "0"),
-      conditions: normalizeConditions(raw.conditions),
-      exhaustionLevel: clamp(intOr(raw.exhaustionLevel, 0), 0, 6),
       portrait: normalizePortrait(raw.portrait)
     };
   }
@@ -321,10 +148,10 @@ function exhaustionEffects(level) {
         tags: "CR ~3",
         location: "Verdant Veil · Old trade route",
         combatants: [
-          mkCombatant({ name: "Bandit Captain", type: "Enemy", cr: "2", ac: 15, speed: 30, hpCurrent: 65, hpMax: 65 }),
-          mkCombatant({ name: "Bandit", type: "Enemy", cr: "1/8", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 }),
-          mkCombatant({ name: "Bandit", type: "Enemy", cr: "1/8", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 }),
-          mkCombatant({ name: "Bandit", type: "Enemy", cr: "1/8", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 })
+          mkCombatant({ name: "Bandit Captain", type: "Enemy", ac: 15, speed: 30, hpCurrent: 65, hpMax: 65 }),
+          mkCombatant({ name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 }),
+          mkCombatant({ name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 }),
+          mkCombatant({ name: "Bandit", type: "Enemy", ac: 12, speed: 30, hpCurrent: 11, hpMax: 11 })
         ]
       },
       {
@@ -333,8 +160,8 @@ function exhaustionEffects(level) {
         tags: "Ambush",
         location: "Frostclaw Wilds · Coastal ice",
         combatants: [
-          mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", cr: "3", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
-          mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", cr: "3", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
+          mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
+          mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
           mkCombatant({ name: "Clan Hunter", type: "NPC", ac: 14, speed: 30, hpCurrent: 32, hpMax: 32 })
         ]
       }
@@ -344,9 +171,9 @@ function exhaustionEffects(level) {
   function defaultState() {
     const parties = initialParties();
     const activeCombatants = [
-      mkCombatant({ name: "Vesper", type: "PC", level: 5, ac: 16, speed: 30, hpCurrent: 27, hpMax: 35 }),
-      mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", cr: "3", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
-      mkCombatant({ name: "Bandit Captain", type: "Enemy", cr: "2", ac: 15, speed: 30, hpCurrent: 0, hpMax: 65 })
+      mkCombatant({ name: "Vesper", type: "PC", ac: 16, speed: 30, hpCurrent: 27, hpMax: 35 }),
+      mkCombatant({ name: "Frostclaw Wolf", type: "Enemy", ac: 13, speed: 40, hpCurrent: 55, hpMax: 55 }),
+      mkCombatant({ name: "Bandit Captain", type: "Enemy", ac: 15, speed: 30, hpCurrent: 0, hpMax: 65 })
     ];
 
     return {
@@ -365,7 +192,6 @@ function exhaustionEffects(level) {
       createTags: "",
       createLocation: "",
       libraryEditId: null,
-      conditionDefaults: normalizeConditionDefaults(),
       // add form for active
       addDraft: {
         name: "",
@@ -374,9 +200,7 @@ function exhaustionEffects(level) {
         ac: 15,
         speed: 30,
         hpCurrent: 12,
-        hpMax: 12,
-        level: 3,
-        cr: "1"
+        hpMax: 12
       },
       libraryAddDraft: {
         name: "",
@@ -385,9 +209,7 @@ function exhaustionEffects(level) {
         ac: 13,
         speed: 30,
         hpCurrent: 10,
-        hpMax: 10,
-        level: 3,
-        cr: "1"
+        hpMax: 10
       },
       // editor modal
       editorOpen: false,
@@ -397,8 +219,12 @@ function exhaustionEffects(level) {
         tags: "",
         location: "",
         combatants: [],
-        addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10, level: 3, cr: "1" }
-      }
+        addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10 }
+      },
+      monsterPickerOpen: false,
+      monsterPickerEncounterId: null,
+      monsterPickerQuery: "",
+      monsterPickerCr: "all"
     };
   }
 
@@ -456,13 +282,6 @@ function exhaustionEffects(level) {
       state.activeLibraryId = null;
     }
 
-    // Heal stale "active" flags created by older quick-create behavior.
-    // If no active cards exist and we still have the default encounter name,
-    // this is not a truly activated encounter.
-    if (state.activeLibraryId && state.activeCombatants.length === 0 && state.activeEncounterName === "Current Encounter") {
-      state.activeLibraryId = null;
-    }
-
     state.createName = String(state.createName || "");
     state.createTags = String(state.createTags || "");
     state.createLocation = String(state.createLocation || "");
@@ -471,8 +290,6 @@ function exhaustionEffects(level) {
       state.libraryEditId = null;
     }
 
-    state.conditionDefaults = normalizeConditionDefaults(state.conditionDefaults);
-
     state.addDraft = {
       name: String(state.addDraft?.name || ""),
       type: ["PC", "NPC", "Enemy"].includes(state.addDraft?.type) ? state.addDraft.type : "NPC",
@@ -480,9 +297,7 @@ function exhaustionEffects(level) {
       ac: Math.max(0, intOr(state.addDraft?.ac, 15)),
       speed: Math.max(0, intOr(state.addDraft?.speed, 30)),
       hpCurrent: Math.max(0, intOr(state.addDraft?.hpCurrent, 10)),
-      hpMax: Math.max(0, intOr(state.addDraft?.hpMax, 10)),
-      level: normalizeLevel(state.addDraft?.level, 3),
-      cr: normalizeCR(state.addDraft?.cr, "1")
+      hpMax: Math.max(0, intOr(state.addDraft?.hpMax, 10))
     };
 
     state.libraryAddDraft = {
@@ -492,9 +307,7 @@ function exhaustionEffects(level) {
       ac: Math.max(0, intOr(state.libraryAddDraft?.ac, 13)),
       speed: Math.max(0, intOr(state.libraryAddDraft?.speed, 30)),
       hpCurrent: Math.max(0, intOr(state.libraryAddDraft?.hpCurrent, 10)),
-      hpMax: Math.max(0, intOr(state.libraryAddDraft?.hpMax, 10)),
-      level: normalizeLevel(state.libraryAddDraft?.level, 3),
-      cr: normalizeCR(state.libraryAddDraft?.cr, "1")
+      hpMax: Math.max(0, intOr(state.libraryAddDraft?.hpMax, 10))
     };
 
     state.editorOpen = !!state.editorOpen;
@@ -512,11 +325,18 @@ function exhaustionEffects(level) {
         ac: Math.max(0, intOr(ed.addDraft?.ac, 13)),
         speed: Math.max(0, intOr(ed.addDraft?.speed, 30)),
         hpCurrent: Math.max(0, intOr(ed.addDraft?.hpCurrent, 10)),
-        hpMax: Math.max(0, intOr(ed.addDraft?.hpMax, 10)),
-        level: normalizeLevel(ed.addDraft?.level, 3),
-        cr: normalizeCR(ed.addDraft?.cr, "1")
+        hpMax: Math.max(0, intOr(ed.addDraft?.hpMax, 10))
       }
     };
+
+    state.monsterPickerOpen = !!state.monsterPickerOpen;
+    state.monsterPickerEncounterId = state.monsterPickerEncounterId || null;
+    if (state.monsterPickerEncounterId && !state.library.some((e) => e.id === state.monsterPickerEncounterId)) {
+      state.monsterPickerEncounterId = null;
+      state.monsterPickerOpen = false;
+    }
+    state.monsterPickerQuery = String(state.monsterPickerQuery || "");
+    state.monsterPickerCr = state.monsterPickerCr ? String(state.monsterPickerCr) : "all";
 
     return state;
   }
@@ -627,226 +447,6 @@ function exhaustionEffects(level) {
       startOffsetX: 0,
       startOffsetY: 0
     };
-
-    const conditionEditor = {
-      open: false,
-      cardId: null
-    };
-
-    function getActiveCombatantById(cardId) {
-      return state.activeCombatants.find((c) => c.id === cardId) || null;
-    }
-
-    function getConditionTargetCombatant() {
-      return conditionEditor.cardId ? getActiveCombatantById(conditionEditor.cardId) : null;
-    }
-
-    function openConditionEditor(cardId) {
-      if (!cardId) return;
-      const c = getActiveCombatantById(cardId);
-      if (!c) return;
-      conditionEditor.open = true;
-      conditionEditor.cardId = cardId;
-      render();
-    }
-
-    function closeConditionEditor() {
-      if (!conditionEditor.open) return;
-      conditionEditor.open = false;
-      conditionEditor.cardId = null;
-      render();
-    }
-
-
-function getConditionDefault(name) {
-  const canonical = canonicalConditionName(name);
-  if (!canonical || canonical === "Exhaustion") return null;
-  const stored = state.conditionDefaults?.[canonical];
-  const base = CONDITION_DEFAULTS_2024[canonical] || null;
-  const src = stored && typeof stored === "object" ? stored : base;
-  if (!src) return null;
-  return {
-    duration: Math.max(1, intOr(src.duration, 1)),
-    unit: normalizeConditionUnit(src.unit, "round")
-  };
-}
-
-function updateConditionDefault(name, duration, unit) {
-  const canonical = canonicalConditionName(name);
-  if (!canonical || canonical === "Exhaustion") return;
-  const dur = Math.max(1, intOr(duration, 1));
-  const normalizedUnit = normalizeConditionUnit(unit, "round");
-  if (!state.conditionDefaults || typeof state.conditionDefaults !== "object") {
-    state.conditionDefaults = normalizeConditionDefaults();
-  }
-  state.conditionDefaults[canonical] = { duration: dur, unit: normalizedUnit };
-}
-
-function stepConditionDurations(unit) {
-  const normalizedUnit = normalizeConditionUnit(unit, "round");
-  state.activeCombatants.forEach((c) => {
-    c.conditions = (c.conditions || [])
-      .map((cond) => {
-        const duration = intOr(cond?.duration, 0);
-        const condUnit = normalizeConditionUnit(cond?.unit, "round");
-        if (!duration || duration <= 0 || condUnit !== normalizedUnit) {
-          return { ...cond, duration: duration > 0 ? duration : null, unit: condUnit };
-        }
-        const next = duration - 1;
-        return next > 0 ? { ...cond, duration: next, unit: condUnit } : null;
-      })
-      .filter(Boolean);
-  });
-}
-
-    function toggleCondition(cardId, conditionName) {
-      const c = getActiveCombatantById(cardId);
-      const name = canonicalConditionName(conditionName);
-      if (!c || !name || name === "Exhaustion") return;
-      const idx = c.conditions.findIndex((x) => x.name === name);
-      if (idx >= 0) {
-        c.conditions.splice(idx, 1);
-      } else {
-        const preset = getConditionDefault(name);
-        c.conditions.push({
-          name,
-          duration: preset?.duration ?? null,
-          unit: preset?.unit || "round"
-        });
-      }
-      c.conditions = normalizeConditions(c.conditions);
-      persistAndRender();
-    }
-
-    function setConditionDuration(cardId, conditionName, rawValue) {
-      const c = getActiveCombatantById(cardId);
-      const name = canonicalConditionName(conditionName);
-      if (!c || !name || name === "Exhaustion") return;
-      const entry = c.conditions.find((x) => x.name === name);
-      if (!entry) return;
-      const trimmed = String(rawValue ?? "").trim();
-      if (!trimmed) {
-        entry.duration = null;
-      } else {
-        const n = Math.max(1, intOr(trimmed, entry.duration || getConditionDefault(name)?.duration || 1));
-        entry.duration = n;
-        updateConditionDefault(name, n, entry.unit || "round");
-      }
-      saveState(state);
-      render();
-    }
-
-    function setConditionUnit(cardId, conditionName, rawUnit) {
-      const c = getActiveCombatantById(cardId);
-      const name = canonicalConditionName(conditionName);
-      if (!c || !name || name === "Exhaustion") return;
-      const entry = c.conditions.find((x) => x.name === name);
-      if (!entry) return;
-      entry.unit = normalizeConditionUnit(rawUnit, "round");
-      if (entry.duration && entry.duration > 0) {
-        updateConditionDefault(name, entry.duration, entry.unit);
-      }
-      saveState(state);
-      render();
-    }
-
-    function removeCondition(cardId, conditionName) {
-      const c = getActiveCombatantById(cardId);
-      const name = canonicalConditionName(conditionName);
-      if (!c || !name) return;
-      c.conditions = c.conditions.filter((x) => x.name !== name);
-      persistAndRender();
-    }
-
-    function clearAllConditions(cardId) {
-      const c = getActiveCombatantById(cardId);
-      if (!c) return;
-      c.conditions = [];
-      c.exhaustionLevel = 0;
-      persistAndRender();
-    }
-
-    function setExhaustionLevel(cardId, value) {
-      const c = getActiveCombatantById(cardId);
-      if (!c) return;
-      c.exhaustionLevel = clamp(intOr(value, c.exhaustionLevel), 0, 6);
-      persistAndRender();
-    }
-
-    function renderConditionBadges(c, variant = "default") {
-      const chips = [];
-      (c.conditions || []).forEach((cond) => {
-        const suffix = conditionDurationShort(cond);
-        const label = suffix ? `${cond.name} · ${suffix}` : cond.name;
-        chips.push(`<span class="condition-chip" title="${esc(conditionTooltip(cond.name))}">${esc(label)}</span>`);
-      });
-      if ((c.exhaustionLevel || 0) > 0) {
-        chips.push(`<span class="condition-chip exhaustion" title="${esc(conditionTooltip("Exhaustion"))}">Exhaustion ${c.exhaustionLevel}</span>`);
-      }
-      if (!chips.length) return "";
-      const rowClass = variant === "inline" ? "condition-row condition-row-inline" : "condition-row";
-      return `<div class="${rowClass}">${chips.join("")}</div>`;
-    }
-
-    function getEncounterDifficulty(combatants = state.activeCombatants) {
-      const roster = Array.isArray(combatants) ? combatants : [];
-      const allies = roster.filter((c) => c.type !== "Enemy");
-      const enemies = roster.filter((c) => c.type === "Enemy");
-
-      const partyLevels = allies.map((c) => normalizeLevel(c.level, 1));
-      const partyCount = partyLevels.length;
-      const enemyCount = enemies.length;
-      const enemyXP = enemies.reduce((sum, c) => sum + crToXP(c.cr), 0);
-
-      const budget = partyLevels.reduce(
-        (acc, lv) => {
-          const row = XP_BUDGET_2024_BY_LEVEL[lv] || XP_BUDGET_2024_BY_LEVEL[1];
-          acc.low += row.low;
-          acc.moderate += row.moderate;
-          acc.high += row.high;
-          return acc;
-        },
-        { low: 0, moderate: 0, high: 0 }
-      );
-
-      let tier = "Not enough data";
-      let tierClass = "tier-none";
-
-      if (!partyCount || !enemyCount) {
-        tier = !partyCount ? "Add PCs/NPCs with levels" : "Add enemies with CR";
-      } else if (enemyXP < budget.low) {
-        tier = "Below Low";
-        tierClass = "tier-below";
-      } else if (enemyXP <= budget.low) {
-        tier = "Low";
-        tierClass = "tier-low";
-      } else if (enemyXP <= budget.moderate) {
-        tier = "Moderate";
-        tierClass = "tier-moderate";
-      } else if (enemyXP <= budget.high) {
-        tier = "High";
-        tierClass = "tier-high";
-      } else {
-        tier = "Over High";
-        tierClass = "tier-over";
-      }
-
-      const pctOfHigh = budget.high > 0 ? Math.round((enemyXP / budget.high) * 100) : 0;
-      const lowPct = budget.high > 0 ? Math.round((budget.low / budget.high) * 100) : 0;
-      const moderatePct = budget.high > 0 ? Math.round((budget.moderate / budget.high) * 100) : 0;
-
-      return {
-        partyCount,
-        enemyCount,
-        enemyXP,
-        budget,
-        tier,
-        tierClass,
-        pctOfHigh: clamp(pctOfHigh, 0, 300),
-        lowPct: clamp(lowPct, 0, 100),
-        moderatePct: clamp(moderatePct, 0, 100)
-      };
-    }
 
     function getSelectedParty() {
       return state.parties.find((p) => p.id === state.selectedPartyId) || null;
@@ -1259,7 +859,7 @@ function stepConditionDurations(unit) {
         tags: enc.tags || "",
         location: enc.location || "",
         combatants: (enc.combatants || []).map((c) => cloneCombatant(c, true)),
-        addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10, level: 3, cr: "1" }
+        addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10 }
       };
       persistAndRender();
     }
@@ -1322,75 +922,78 @@ function stepConditionDurations(unit) {
       `;
     }
 
-    function renderConditionEditorModal() {
-      if (!conditionEditor.open) return "";
-      const combatant = getConditionTargetCombatant();
-      if (!combatant) {
-        conditionEditor.open = false;
-        conditionEditor.cardId = null;
-        return "";
-      }
 
-      const conditionButtons = CONDITIONS_2024.filter((name) => name !== "Exhaustion")
-        .map((name) => {
-          const active = combatant.conditions.some((c) => c.name === name);
-          const preset = getConditionDefault(name);
-          const presetSuffix = preset ? ` · ${preset.duration}${preset.unit === "turn" ? "t" : "r"}` : "";
-          return `<button type="button" class="condition-toggle ${active ? "active" : ""}" data-cond-toggle="${esc(name)}" title="${esc(conditionTooltip(name))}">${esc(name + presetSuffix)}</button>`;
-        })
+    function renderMonsterVaultPickerModal() {
+      if (!state.monsterPickerOpen) return "";
+
+      const encId = state.monsterPickerEncounterId;
+      const encounter = state.library.find((e) => e.id === encId);
+      if (!encounter) return "";
+
+      const allMonsters = monsterVaultMonsters();
+      const query = String(state.monsterPickerQuery || "").trim().toLowerCase();
+      const crFilter = String(state.monsterPickerCr || "all");
+
+      const crValues = [...new Set(allMonsters.map((m) => m.cr).filter(Boolean))]
+        .sort((a, b) => crToFloat(a) - crToFloat(b));
+
+      const filtered = allMonsters.filter((m) => {
+        if (crFilter !== "all" && m.cr !== crFilter) return false;
+        if (!query) return true;
+        const hay = `${m.name} ${m.cr} ${m.sizeType} ${m.source}`.toLowerCase();
+        return hay.includes(query);
+      });
+
+      const rows = filtered
+        .slice(0, 300)
+        .map(
+          (m) => `
+            <div class="monster-picker-row">
+              <div class="monster-picker-main">
+                <div class="monster-picker-name">${esc(m.name)}</div>
+                <div class="monster-picker-meta">CR ${esc(m.cr)} · AC ${m.ac} · HP ${m.hp} · Spd ${m.speed} · Init ${m.initiative} · ${esc(
+            m.source
+          )}</div>
+              </div>
+              <button class="btn btn-xs" data-picker-add-monster="${esc(m.id)}">Add</button>
+            </div>
+          `
+        )
         .join("");
 
-      const activeRows = combatant.conditions.length
-        ? combatant.conditions
-            .map(
-              (cond) => `
-                <div class="condition-active-row">
-                  <span class="condition-active-name" title="${esc(conditionTooltip(cond.name))}">${esc(cond.name)}</span>
-                  <label>Duration</label>
-                  <input type="number" min="1" data-cond-duration="${esc(cond.name)}" value="${cond.duration || ""}" placeholder="∞">
-                  <select data-cond-unit="${esc(cond.name)}" ${cond.duration ? "" : "disabled"}>
-                    <option value="round" ${normalizeConditionUnit(cond.unit, "round") === "round" ? "selected" : ""}>Rounds</option>
-                    <option value="turn" ${normalizeConditionUnit(cond.unit, "round") === "turn" ? "selected" : ""}>Turns</option>
-                  </select>
-                  <button class="btn btn-secondary btn-xs" type="button" data-cond-remove="${esc(cond.name)}">Remove</button>
-                </div>
-              `
-            )
-            .join("")
-        : `<div class="hint-text">No non-exhaustion conditions on this combatant.</div>`;
+      const emptyText = allMonsters.length
+        ? `No monsters match your filters.`
+        : `Monster Vault not loaded yet. Open the Monster Vault tool once, then try again.`;
 
       return `
-        <div class="condition-editor-backdrop" id="conditionEditorBackdrop">
-          <div class="condition-editor-modal" role="dialog" aria-modal="true" aria-label="Condition editor">
-            <div class="condition-editor-head">
-              <div class="portrait-editor-title">Conditions — ${esc(combatant.name)}</div>
-              <div class="hint-text">Active encounter only • hover names for rules text • durations auto-tick by rounds/turns.</div>
+        <div class="monster-picker-backdrop" id="monsterPickerBackdrop">
+          <div class="monster-picker-modal" role="dialog" aria-modal="true" aria-label="Add from Monster Vault">
+            <div class="monster-picker-head">
+              <div class="portrait-editor-title">Add from Monster Vault</div>
+              <div class="hint-text">${esc(encounter.name)} · ${encounter.combatants.length} saved</div>
             </div>
 
-            <div class="condition-picker-grid">
-              ${conditionButtons}
-            </div>
-
-            <div class="condition-editor-block">
-              <div class="boxed-subsection-title">Applied conditions</div>
-              ${activeRows}
-            </div>
-
-            <div class="condition-editor-block">
-              <div class="boxed-subsection-title">Exhaustion level</div>
-              <div class="row">
-                <div class="col" style="max-width:90px;">
-                  <input type="number" min="0" max="6" id="condExhaustionInput" value="${clamp(intOr(combatant.exhaustionLevel, 0), 0, 6)}">
-                </div>
-                <div class="col">
-                  <div class="hint-text">${esc(exhaustionEffects(combatant.exhaustionLevel))}</div>
-                </div>
+            <div class="monster-picker-filters">
+              <div class="col">
+                <label for="monsterPickerSearch">Search</label>
+                <input id="monsterPickerSearch" type="text" placeholder="Goblin, Dragon, CR 5..." value="${esc(state.monsterPickerQuery)}">
+              </div>
+              <div class="col" style="max-width:120px;">
+                <label for="monsterPickerCr">CR</label>
+                <select id="monsterPickerCr">
+                  <option value="all" ${crFilter === "all" ? "selected" : ""}>All</option>
+                  ${crValues.map((cr) => `<option value="${esc(cr)}" ${crFilter === cr ? "selected" : ""}>${esc(cr)}</option>`).join("")}
+                </select>
               </div>
             </div>
 
-            <div class="portrait-editor-actions">
-              <button type="button" class="btn btn-secondary btn-xs" id="condClearAllBtn">Clear all</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="condCloseBtn">Close</button>
+            <div class="monster-picker-count">${filtered.length} result${filtered.length === 1 ? "" : "s"}${filtered.length > 300 ? " (showing first 300)" : ""}</div>
+            <div class="monster-picker-list">
+              ${rows || `<div class="hint-text" style="padding:8px;">${emptyText}</div>`}
+            </div>
+
+            <div class="portrait-editor-actions" style="justify-content:flex-end;">
+              <button type="button" class="btn btn-secondary btn-xs" id="monsterPickerCloseBtn">Done</button>
             </div>
           </div>
         </div>
@@ -1401,7 +1004,7 @@ function stepConditionDurations(unit) {
       if (!party || !state.partyManagerOpen) return "";
 
       const rows = party.members
-        .map((m) => {
+        .map((m, i) => {
           return `
             <div class="row" data-party-member-row="${esc(m.id)}">
               <div class="col" style="max-width:66px;">
@@ -1417,8 +1020,6 @@ function stepConditionDurations(unit) {
                 </select>
               </div>
               <div class="col" style="max-width:78px;"><label>Init</label><input type="number" min="0" data-party-field="initiative" data-member-id="${esc(m.id)}" value="${intOr(m.initiative, 0)}"></div>
-              <div class="col" style="max-width:74px;"><label>Lvl</label><input type="number" min="1" max="20" data-party-field="level" data-member-id="${esc(m.id)}" value="${normalizeLevel(m.level, 3)}"></div>
-              <div class="col" style="max-width:82px;"><label>CR</label><input type="text" data-party-field="cr" data-member-id="${esc(m.id)}" value="${esc(normalizeCR(m.cr, "1"))}"></div>
               <div class="col" style="max-width:70px;"><label>AC</label><input type="number" min="0" data-party-field="ac" data-member-id="${esc(m.id)}" value="${m.ac}"></div>
               <div class="col" style="max-width:90px;"><label>Speed</label><input type="number" min="0" data-party-field="speed" data-member-id="${esc(m.id)}" value="${m.speed}"></div>
               <div class="col" style="max-width:90px;"><label>HP Cur</label><input type="number" min="0" data-party-field="hpCurrent" data-member-id="${esc(m.id)}" value="${m.hpCurrent}"></div>
@@ -1433,7 +1034,7 @@ function stepConditionDurations(unit) {
         <div class="boxed-subsection" style="margin-top:6px;">
           <div class="boxed-subsection-header">
             <div class="boxed-subsection-title">Manage party preset</div>
-            <span class="hint-text">Portraits + level/CR persist for future encounter prep.</span>
+            <span class="hint-text">Preset AC / speed / HP used by quick add and add full party.</span>
           </div>
 
           <div class="row">
@@ -1473,14 +1074,6 @@ function stepConditionDurations(unit) {
             <div class="col" style="max-width:110px;">
               <label>Speed (ft)</label>
               <input type="number" min="0" id="addSpeed" value="${state.addDraft.speed}">
-            </div>
-            <div class="col" style="max-width:78px;">
-              <label>Lvl</label>
-              <input type="number" min="1" max="20" id="addLevel" value="${normalizeLevel(state.addDraft.level, 3)}">
-            </div>
-            <div class="col" style="max-width:90px;">
-              <label>CR</label>
-              <input type="text" id="addCR" value="${esc(normalizeCR(state.addDraft.cr, "1"))}" placeholder="1/2">
             </div>
             <div class="col" style="max-width:178px;">
               <label>HP (current / max)</label>
@@ -1532,15 +1125,11 @@ function stepConditionDurations(unit) {
           const active = i === state.turnIndex;
           const downed = c.hpCurrent <= 0;
           const typeClass = tagClass(c.type);
-          const auxLabel = c.type === "Enemy" ? "CR" : "Lvl";
-          const auxValue = c.type === "Enemy" ? normalizeCR(c.cr, "1") : normalizeLevel(c.level, 3);
-          const auxField = c.type === "Enemy" ? "cr" : "level";
-          const auxType = c.type === "Enemy" ? "text" : "number";
           return `
             <div class="card ${typeClass} ${active ? "active-turn" : ""} ${downed ? "downed" : ""}" draggable="true" data-card-id="${esc(c.id)}">
               <div class="card-main">
                 ${portraitMarkup(c, "active")}
-                <div class="card-content active-card-content">
+                <div class="card-content">
                   <div class="name-block">
                     <div class="name-row">
                       <span class="inline-edit inline-edit-name" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="name" data-type="text">
@@ -1561,12 +1150,7 @@ function stepConditionDurations(unit) {
                     <div class="hp-buttons">
                       <button class="btn btn-xs" data-dmg="${esc(c.id)}">Damage</button>
                       <button class="btn btn-secondary btn-xs" data-heal="${esc(c.id)}">Heal</button>
-                      <button class="btn btn-secondary btn-xs" data-open-conds="${esc(c.id)}">Conditions</button>
                     </div>
-                  </div>
-
-                  <div class="card-conditions-slot">
-                    ${renderConditionBadges(c, "inline")}
                   </div>
 
                   <div class="card-meta">
@@ -1591,13 +1175,6 @@ function stepConditionDurations(unit) {
                           <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="speed" data-type="number">
                             <span class="inline-view meta-v" title="Click to edit">${c.speed}</span>
                             <input class="inline-input inline-input-meta" type="number" min="0" value="${c.speed}" aria-label="Edit speed">
-                          </span>
-                        </div>
-                        <div class="meta-read-line">
-                          <span class="meta-k">${auxLabel}</span>
-                          <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="active" data-card-id="${esc(c.id)}" data-field="${auxField}" data-type="${auxType}">
-                            <span class="inline-view meta-v" title="Click to edit">${esc(String(auxValue))}</span>
-                            <input class="inline-input inline-input-meta" ${auxType === "number" ? 'type="number" min="1" max="20"' : 'type="text"'} value="${esc(String(auxValue))}" aria-label="Edit ${auxLabel}">
                           </span>
                         </div>
                       </div>
@@ -1637,7 +1214,7 @@ function stepConditionDurations(unit) {
           </div>
         </div>
 
-                <div class="boxed-subsection">
+        <div class="boxed-subsection">
           <div class="boxed-subsection-header">
             <button class="btn btn-secondary btn-xs" id="toggleAddSectionBtn" style="gap:8px; border-radius:8px;">
               <span class="chevron">${addExpanded ? "▾" : "▸"}</span>
@@ -1660,6 +1237,8 @@ function stepConditionDurations(unit) {
       `;
     }
 
+    
+    
 function renderLibraryTab() {
   const party = getSelectedParty();
   const editingId = state.libraryEditId;
@@ -1671,17 +1250,11 @@ function renderLibraryTab() {
       const namesList = enc.combatants.length
         ? enc.combatants.map((c) => c.name).join(" · ")
         : "No combatants saved";
-      const builderDifficulty = getEncounterDifficulty(enc.combatants);
 
       const editorCards = isEditing
         ? enc.combatants
             .map((c) => {
               const downed = c.hpCurrent <= 0;
-              const auxLabel = c.type === "Enemy" ? "CR" : "Lvl";
-              const auxValue = c.type === "Enemy" ? normalizeCR(c.cr, "1") : normalizeLevel(c.level, 3);
-              const auxField = c.type === "Enemy" ? "cr" : "level";
-              const auxType = c.type === "Enemy" ? "text" : "number";
-
               return `
                 <div class="card ${tagClass(c.type)} ${downed ? "downed" : ""}" draggable="true" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">
                   <div class="card-main">
@@ -1726,13 +1299,6 @@ function renderLibraryTab() {
                                 <input class="inline-input inline-input-meta" type="number" min="0" value="${c.speed}" aria-label="Edit speed">
                               </span>
                             </div>
-                            <div class="meta-read-line">
-                              <span class="meta-k">${auxLabel}</span>
-                              <span class="inline-edit inline-edit-meta" data-inline-edit data-scope="library" data-lib-enc-id="${esc(enc.id)}" data-card-id="${esc(c.id)}" data-field="${auxField}" data-type="${auxType}">
-                                <span class="inline-view meta-v" title="Click to edit">${esc(String(auxValue))}</span>
-                                <input class="inline-input inline-input-meta" ${auxType === "number" ? 'type="number" min="1" max="20"' : 'type="text"'} value="${esc(String(auxValue))}" aria-label="Edit ${auxLabel}">
-                              </span>
-                            </div>
                           </div>
                           <button class="btn-icon" title="Remove" data-lib-remove-card="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">×</button>
                         </div>
@@ -1751,32 +1317,6 @@ function renderLibraryTab() {
             <div class="row">
               <div class="col"><label>Name</label><input type="text" data-lib-enc-field="name" data-lib-enc-id="${esc(enc.id)}" value="${esc(enc.name)}"></div>
               <div class="col"><label>Location</label><input type="text" data-lib-enc-field="location" data-lib-enc-id="${esc(enc.id)}" value="${esc(enc.location || "")}"></div>
-            </div>
-
-            <div class="boxed-subsection" style="margin-top:6px;">
-              <div class="boxed-subsection-header">
-                <div class="boxed-subsection-title">Builder Difficulty Meter (2024)</div>
-                <span class="hint-text">Prep balance here before activating this encounter.</span>
-              </div>
-              <div class="difficulty-summary">
-                <div class="difficulty-line">
-                  <span><b>Party:</b> ${builderDifficulty.partyCount} combatant${builderDifficulty.partyCount === 1 ? "" : "s"}</span>
-                  <span><b>Enemies:</b> ${builderDifficulty.enemyCount}</span>
-                  <span><b>Enemy XP:</b> ${builderDifficulty.enemyXP.toLocaleString()}</span>
-                  <span class="difficulty-pill ${builderDifficulty.tierClass}">${builderDifficulty.tier}</span>
-                </div>
-                <div class="difficulty-track">
-                  <div class="difficulty-threshold low" style="left:${builderDifficulty.lowPct}%"></div>
-                  <div class="difficulty-threshold moderate" style="left:${builderDifficulty.moderatePct}%"></div>
-                  <div class="difficulty-fill ${builderDifficulty.tierClass}" style="width:${Math.min(100, builderDifficulty.pctOfHigh)}%"></div>
-                </div>
-                <div class="difficulty-legend">
-                  <span>Low ${builderDifficulty.budget.low.toLocaleString()}</span>
-                  <span>Moderate ${builderDifficulty.budget.moderate.toLocaleString()}</span>
-                  <span>High ${builderDifficulty.budget.high.toLocaleString()}</span>
-                  <span>${builderDifficulty.pctOfHigh}% of High</span>
-                </div>
-              </div>
             </div>
 
             <div class="boxed-subsection">
@@ -1805,7 +1345,10 @@ function renderLibraryTab() {
             <div class="boxed-subsection">
               <div class="boxed-subsection-header">
                 <div class="boxed-subsection-title">Add combatant</div>
-                <span class="hint-text">Auto-sorts by initiative. Use Lvl for PCs/NPCs, CR for enemies.</span>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                  <span class="hint-text">Auto-sorts by highest initiative when added. Drag to reorder anytime.</span>
+                  <button class="btn btn-secondary btn-xs" data-open-monster-vault="${esc(enc.id)}">Add from Monster Vault</button>
+                </div>
               </div>
               <div class="row">
                 <div class="col"><label>Name</label><input type="text" id="libAddName_${esc(enc.id)}" value="${esc(state.libraryAddDraft.name)}" placeholder="Goblin, Veteran, Mage"></div>
@@ -1819,8 +1362,6 @@ function renderLibraryTab() {
                 <div class="col" style="max-width:76px;"><label>Init</label><input type="number" min="0" id="libAddInit_${esc(enc.id)}" value="${state.libraryAddDraft.initiative}"></div>
                 <div class="col" style="max-width:70px;"><label>AC</label><input type="number" min="0" id="libAddAC_${esc(enc.id)}" value="${state.libraryAddDraft.ac}"></div>
                 <div class="col" style="max-width:90px;"><label>Speed</label><input type="number" min="0" id="libAddSpeed_${esc(enc.id)}" value="${state.libraryAddDraft.speed}"></div>
-                <div class="col" style="max-width:74px;"><label>Lvl</label><input type="number" min="1" max="20" id="libAddLevel_${esc(enc.id)}" value="${normalizeLevel(state.libraryAddDraft.level, 3)}"></div>
-                <div class="col" style="max-width:80px;"><label>CR</label><input type="text" id="libAddCR_${esc(enc.id)}" value="${esc(normalizeCR(state.libraryAddDraft.cr, "1"))}" placeholder="1/4"></div>
                 <div class="col" style="max-width:88px;"><label>HP Cur</label><input type="number" min="0" id="libAddHpCur_${esc(enc.id)}" value="${state.libraryAddDraft.hpCurrent}"></div>
                 <div class="col" style="max-width:88px;"><label>HP Max</label><input type="number" min="0" id="libAddHpMax_${esc(enc.id)}" value="${state.libraryAddDraft.hpMax}"></div>
                 <div class="col" style="max-width:80px;"><label>&nbsp;</label><button class="btn btn-xs" data-lib-add-combatant="${esc(enc.id)}">Add</button></div>
@@ -1872,14 +1413,14 @@ function renderLibraryTab() {
 
     <div class="boxed-subsection">
       <div class="boxed-subsection-header">
-        <div class="boxed-subsection-title">Quick create encounter</div>
-        <span class="hint-text">Create a shell entry now, then edit combatants below.</span>
+        <div class="boxed-subsection-title">Create encounter entry</div>
+        <span class="hint-text">Name it, then save the current active combatants into the library.</span>
       </div>
       <div class="row">
         <div class="col"><label>Name</label><input type="text" id="createName" placeholder="Ruined Tower Ambush" value="${esc(state.createName)}"></div>
         <div class="col"><label>Location</label><input type="text" id="createLocation" placeholder="Onyx frontier road" value="${esc(state.createLocation)}"></div>
         <div class="col" style="max-width:180px; display:flex; gap:6px; align-items:flex-end;">
-          <button class="btn btn-xs" id="quickCreateEncounterBtn">Create</button>
+          <button class="btn btn-xs" id="createFromActiveBtn">Create from active</button>
         </div>
       </div>
     </div>
@@ -2236,59 +1777,31 @@ function renderEditorModal() {
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(170px,1.25fr) minmax(270px,1.02fr) minmax(150px,0.9fr);
-          grid-template-areas: "name hp meta";
+          grid-template-columns: minmax(150px,1.7fr) auto minmax(106px,0.95fr);
           align-items: center;
           column-gap: 8px;
-          row-gap: 2px;
         }
 
-        .card-content.active-card-content {
-          grid-template-columns: minmax(165px,1.08fr) minmax(258px,1.05fr) minmax(176px,0.92fr) minmax(148px,0.9fr);
-          grid-template-areas: "name hp cond meta";
-          column-gap: 8px;
-        }
-
-        .card-conditions-slot {
-          grid-area: cond;
-          min-width: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          justify-self: center;
-          width: 100%;
-          max-width: 194px;
-        }
-
-        .name-block {
-          min-width: 0;
-          grid-area: name;
-          display: flex;
-          justify-content: flex-start;
-          align-items: center;
-        }
+        .name-block { min-width: 0; }
         .name-row {
-          display: inline-flex;
+          display: flex;
           align-items: center;
           justify-content: flex-start;
           gap: 6px;
           min-width: 0;
-          width: auto;
-          max-width: 100%;
         }
 
         .card-name {
           min-width: 0;
-          font-weight: 680;
-          font-size: 0.98rem;
+          font-weight: 640;
+          font-size: 0.9rem;
           letter-spacing: 0.01em;
           color: #eef3ff;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           display: inline-block;
-          max-width: min(300px, 100%);
-          text-align: left;
+          max-width: 100%;
         }
 
         .inline-edit {
@@ -2340,11 +1853,11 @@ function renderEditorModal() {
         .inline-edit-name {
           flex: 0 1 auto;
           min-width: 0;
-          max-width: min(300px, 100%);
+          max-width: calc(100% - 58px);
         }
 
         .inline-input-name {
-          width: min(240px, 100%);
+          width: min(260px, 100%);
           font-size: 0.86rem;
           line-height: 1.2;
           padding: 3px 7px;
@@ -2378,15 +1891,12 @@ function renderEditorModal() {
         .enemy-card .card-tag { border-color: #6b2c38; color: #ffb8c0; background: #190b10; }
 
         .hp-block {
-          grid-area: hp;
           display: inline-flex;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-start;
           gap: 4px;
-          justify-self: center;
+          justify-self: start;
           min-width: 0;
-          flex-wrap: wrap;
-          margin: 0 auto;
         }
 
         .hp-label { font-size: 0.86rem; font-weight: 600; white-space: nowrap; }
@@ -2416,7 +1926,6 @@ function renderEditorModal() {
         }
 
         .card-meta {
-          grid-area: meta;
           display: flex;
           flex-direction: column;
           align-items: flex-end;
@@ -2461,15 +1970,15 @@ function renderEditorModal() {
           display: flex;
           flex-direction: column;
           gap: 4px;
-          min-width: 68px;
+          min-width: 64px;
         }
 
         .meta-read-line {
           display: flex;
           align-items: center;
-          justify-content: flex-end;
+          justify-content: space-between;
           gap: 8px;
-          min-width: 68px;
+          min-width: 64px;
         }
 
         .card-meta-top .btn-icon {
@@ -2674,279 +2183,101 @@ function renderEditorModal() {
           gap: 6px;
         }
 
-        .condition-row {
-          margin-top: 0;
-          display: flex;
-          flex-wrap: nowrap;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 4px;
-          min-height: 0;
-          width: 100%;
-          max-width: 240px;
-          overflow-x: auto;
-          scrollbar-width: thin;
-        }
-
-        .condition-row.condition-row-inline {
-          margin: 0;
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 4px 6px;
-          align-content: center;
-          justify-items: stretch;
-          width: 100%;
-          max-width: 186px;
-          max-height: 66px;
-          overflow-x: hidden;
-          overflow-y: auto;
-          padding-right: 1px;
-        }
-
-        .condition-row.condition-row-inline .condition-chip {
-          width: 100%;
-          justify-content: center;
-          padding: 3px 7px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          font-size: 0.71rem;
-        }
-
-        .card-meta .condition-row {
-          align-self: flex-end;
-        }
-
-        .condition-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          border-radius: 999px;
-          border: 1px solid #2f3845;
-          background: #0a1018;
-          color: #d6e2f8;
-          font-size: 0.7rem;
-          line-height: 1;
-          padding: 3px 7px;
-          white-space: nowrap;
-        }
-
-        .condition-chip.exhaustion {
-          border-color: #7d5e2f;
-          background: #1a1408;
-          color: #ffdca3;
-        }
-
-        .condition-editor-backdrop {
+        .monster-picker-backdrop {
           position: fixed;
           inset: 0;
-          z-index: 10000;
-          background: rgba(2, 4, 8, 0.72);
+          background: rgba(0, 0, 0, 0.68);
+          z-index: 2147483600;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 14px;
-          backdrop-filter: blur(3px);
+          padding: 16px;
         }
 
-        .condition-editor-modal {
-          width: min(94vw, 560px);
-          max-height: 90vh;
-          overflow: auto;
-          border-radius: 12px;
-          border: 1px solid #2b3444;
-          background: linear-gradient(150deg, #0d131d, #06090f 70%);
-          box-shadow: 0 12px 38px rgba(0, 0, 0, 0.55);
-          padding: 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .condition-editor-head {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .condition-picker-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
-          gap: 6px;
-        }
-
-        .condition-toggle {
-          border: 1px solid #303845;
-          background: #0a1018;
-          color: #d6dfef;
-          border-radius: 8px;
-          padding: 6px 8px;
-          font-size: 0.75rem;
-          text-align: center;
-          cursor: pointer;
-          transition: background 0.15s ease, border-color 0.15s ease;
-        }
-
-        .condition-toggle:hover {
-          border-color: #4b5b74;
-          background: #101725;
-        }
-
-        .condition-toggle.active {
-          border-color: #5e7cac;
-          background: #18253b;
-          color: #edf4ff;
-          box-shadow: 0 0 0 1px rgba(94,124,172,0.33);
-        }
-
-        .condition-editor-block {
-          border: 1px solid #222a36;
-          border-radius: 10px;
-          background: #05080f;
-          padding: 8px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .condition-active-row {
-          display: grid;
-          grid-template-columns: minmax(80px, 1fr) auto minmax(72px, 92px) minmax(88px, 110px) auto;
-          gap: 6px;
-          align-items: center;
-        }
-
-        .condition-active-name {
-          font-size: 0.78rem;
-          color: #ebf2ff;
-          font-weight: 500;
-        }
-
-        .condition-active-row label {
-          font-size: 0.7rem;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-        }
-        .condition-active-row select {
-          width: 100%;
-          min-width: 88px;
-          font-size: 0.72rem;
-          padding: 5px 6px;
-        }
-
-
-        .difficulty-summary {
+        .monster-picker-modal {
+          width: min(840px, calc(100vw - 24px));
+          max-height: min(78vh, 860px);
+          overflow: hidden;
+          border-radius: 14px;
+          border: 1px solid #313845;
+          background: linear-gradient(180deg, #10151f 0%, #0a0e15 100%);
+          box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6);
           display: flex;
           flex-direction: column;
           gap: 8px;
+          padding: 12px;
         }
 
-        .difficulty-line {
+        .monster-picker-head {
           display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 8px;
           flex-wrap: wrap;
-          gap: 12px;
-          align-items: center;
-          font-size: 0.78rem;
-          color: #d8e1f1;
         }
 
-        .difficulty-pill {
-          margin-left: auto;
-          padding: 3px 8px;
-          border-radius: 999px;
-          border: 1px solid #374153;
-          background: #0a1018;
-          font-size: 0.72rem;
-          font-weight: 650;
-          letter-spacing: 0.01em;
-        }
-
-        .tier-none { border-color: #4d5562; color: #d0d7e2; }
-        .tier-below { border-color: #3a5a68; color: #b6e7ff; background: #081822; }
-        .tier-low { border-color: #2f6b56; color: #b7ffe2; background: #082117; }
-        .tier-moderate { border-color: #5d6f33; color: #e4f2b8; background: #1a220b; }
-        .tier-high { border-color: #8b6d2d; color: #ffe5aa; background: #261b08; }
-        .tier-over { border-color: #8f2e2e; color: #ffc7c7; background: #2b0b0b; }
-
-        .difficulty-track {
-          position: relative;
-          height: 10px;
-          border-radius: 999px;
-          border: 1px solid #2a3342;
-          background: #09101a;
-          overflow: hidden;
-        }
-
-        .difficulty-fill {
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 0;
-          background: linear-gradient(90deg, #3b8f7a, #8f8d3b);
-        }
-
-        .difficulty-fill.tier-high {
-          background: linear-gradient(90deg, #8f7c3b, #8f503b);
-        }
-
-        .difficulty-fill.tier-over {
-          background: linear-gradient(90deg, #8f4f3b, #8f2f3b);
-        }
-
-        .difficulty-fill.tier-below {
-          background: linear-gradient(90deg, #3b6b8f, #2f5577);
-        }
-
-        .difficulty-threshold {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          width: 2px;
-          background: rgba(220, 232, 255, 0.75);
-          transform: translateX(-1px);
-          z-index: 2;
-        }
-
-        .difficulty-threshold.low { background: rgba(164, 236, 199, 0.9); }
-        .difficulty-threshold.moderate { background: rgba(252, 238, 159, 0.9); }
-
-        .difficulty-legend {
+        .monster-picker-filters {
           display: flex;
+          gap: 8px;
           flex-wrap: wrap;
-          gap: 10px;
-          font-size: 0.72rem;
+          align-items: flex-end;
+        }
+
+        .monster-picker-count {
+          font-size: 0.74rem;
           color: var(--text-muted);
         }
 
+        .monster-picker-list {
+          border: 1px solid #252c36;
+          border-radius: 10px;
+          background: #070a10;
+          overflow: auto;
+          min-height: 260px;
+          max-height: 52vh;
+          padding: 6px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .monster-picker-row {
+          border: 1px solid #222a35;
+          border-radius: 9px;
+          padding: 6px 8px;
+          background: #0c1119;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .monster-picker-main {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .monster-picker-name {
+          font-size: 0.82rem;
+          color: var(--text-main);
+          font-weight: 600;
+        }
+
+        .monster-picker-meta {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 620px;
+        }
+
         @media (max-width: 860px) {
-          .card-content {
-            grid-template-columns: 1fr;
-            grid-template-areas:
-              "name"
-              "hp"
-              "meta";
-            row-gap: 4px;
-          }
-          .card-content.active-card-content {
-            grid-template-areas:
-              "name"
-              "hp"
-              "cond"
-              "meta";
-          }
-          .name-block,
-          .name-row { justify-content: center; }
-          .card-meta { justify-self: center; align-items: center; }
-          .hp-block { justify-self: center; }
-          .card-conditions-slot { justify-self: center; width: 100%; }
-          .condition-row { justify-content: center; max-width: 100%; }
-          .condition-row.condition-row-inline {
-            max-width: min(340px, 100%);
-            max-height: none;
-            overflow: visible;
-          }
+          .card-content { grid-template-columns: 1fr; row-gap: 4px; }
+          .card-meta { justify-self: start; align-items: flex-start; }
+          .hp-block { justify-self: start; }
         }
 
         .encounter-row.editing {
@@ -2974,7 +2305,7 @@ function renderEditorModal() {
         </div>
       </div>
       ${renderPortraitEditorModal()}
-      ${renderConditionEditorModal()}
+      ${renderMonsterVaultPickerModal()}
       `;
     }
 
@@ -3022,25 +2353,13 @@ function renderEditorModal() {
           }
 
           let nextValue;
-          if (field === "name") {
+          if (type === "text" || field === "name") {
             nextValue = String(input.value || "").trim() || "Unnamed";
-          } else if (field === "cr") {
-            nextValue = normalizeCR(input.value, target.cr || "1");
-          } else if (field === "level") {
-            nextValue = normalizeLevel(input.value, target.level || 3);
-          } else if (type === "text") {
-            nextValue = String(input.value || "").trim();
           } else {
             nextValue = Math.max(0, intOr(input.value, target[field]));
           }
 
           target[field] = nextValue;
-          if (field === "hpMax") target.hpCurrent = clamp(target.hpCurrent, 0, target.hpMax);
-          if (field === "hpCurrent") target.hpCurrent = clamp(target.hpCurrent, 0, target.hpMax);
-          if (field === "type") {
-            if (target.type === "Enemy") target.cr = normalizeCR(target.cr, "1");
-            else target.level = normalizeLevel(target.level, 3);
-          }
           editor.classList.remove("editing");
           persistAndRender();
         };
@@ -3272,11 +2591,7 @@ function renderEditorModal() {
         nextTurnBtn.addEventListener("click", () => {
           if (!state.activeCombatants.length) return;
           state.turnIndex = (state.turnIndex + 1) % state.activeCombatants.length;
-          stepConditionDurations("turn");
-          if (state.turnIndex === 0) {
-            state.round += 1;
-            stepConditionDurations("round");
-          }
+          if (state.turnIndex === 0) state.round += 1;
           persistAndRender();
         });
       }
@@ -3286,7 +2601,6 @@ function renderEditorModal() {
         nextRoundBtn.addEventListener("click", () => {
           state.round += 1;
           state.turnIndex = 0;
-          stepConditionDurations("round");
           persistAndRender();
         });
       }
@@ -3309,83 +2623,49 @@ function renderEditorModal() {
 
       // add combatant draft sync
       const addInputs = [
-        ["addName", "name", (v) => v],
-        ["addInit", "initiative", (v) => Math.max(0, intOr(v, 10))],
-        ["addAC", "ac", (v) => Math.max(0, intOr(v, 15))],
-        ["addSpeed", "speed", (v) => Math.max(0, intOr(v, 30))],
-        ["addLevel", "level", (v) => normalizeLevel(v, state.addDraft.level || 3)],
-        ["addCR", "cr", (v) => normalizeCR(v, state.addDraft.cr || "1")],
-        ["addHpCur", "hpCurrent", (v) => Math.max(0, intOr(v, state.addDraft.hpCurrent))],
-        ["addHpMax", "hpMax", (v) => Math.max(0, intOr(v, state.addDraft.hpMax))]
+        ["addName", "name"],
+        ["addInit", "initiative"],
+        ["addAC", "ac"],
+        ["addSpeed", "speed"],
+        ["addHpCur", "hpCurrent"],
+        ["addHpMax", "hpMax"],
+        ["addType", "type"]
       ];
-      addInputs.forEach(([id, key, transform]) => {
+      addInputs.forEach(([id, key]) => {
         const el = shadow.getElementById(id);
         if (!el) return;
         el.addEventListener("input", () => {
-          const next = transform ? transform(el.value) : el.value;
-          if (key === "name") state.addDraft.name = String(next);
-          else if (key === "cr") state.addDraft.cr = normalizeCR(next, state.addDraft.cr || "1");
-          else if (key === "level") state.addDraft.level = normalizeLevel(next, state.addDraft.level || 3);
-          else state.addDraft[key] = next;
+          if (key === "name" || key === "type") {
+            state.addDraft[key] = el.value;
+          } else {
+            state.addDraft[key] = Math.max(0, intOr(el.value, state.addDraft[key]));
+          }
           saveState(state);
         });
       });
 
-      const addTypeEl = shadow.getElementById("addType");
-      if (addTypeEl) {
-        addTypeEl.addEventListener("change", () => {
-          state.addDraft.type = addTypeEl.value;
-          if (state.addDraft.type === "Enemy") state.addDraft.cr = normalizeCR(state.addDraft.cr, "1");
-          else state.addDraft.level = normalizeLevel(state.addDraft.level, 3);
-          saveState(state);
-        });
-      }
-
       const addCombatantBtn = shadow.getElementById("addCombatantBtn");
+      const addNameEl = shadow.getElementById("addName");
       if (addCombatantBtn) {
         addCombatantBtn.addEventListener("click", () => {
-          const nameEl = shadow.getElementById("addName");
-          const initEl = shadow.getElementById("addInit");
-          const acEl = shadow.getElementById("addAC");
-          const speedEl = shadow.getElementById("addSpeed");
-          const levelEl = shadow.getElementById("addLevel");
-          const crEl = shadow.getElementById("addCR");
-          const hpCurEl = shadow.getElementById("addHpCur");
-          const hpMaxEl = shadow.getElementById("addHpMax");
-          const typeEl = shadow.getElementById("addType");
-
-          state.addDraft.name = String(nameEl?.value ?? state.addDraft.name);
-          state.addDraft.initiative = Math.max(0, intOr(initEl?.value, state.addDraft.initiative));
-          state.addDraft.ac = Math.max(0, intOr(acEl?.value, state.addDraft.ac));
-          state.addDraft.speed = Math.max(0, intOr(speedEl?.value, state.addDraft.speed));
-          state.addDraft.level = normalizeLevel(levelEl?.value, state.addDraft.level || 3);
-          state.addDraft.cr = normalizeCR(crEl?.value, state.addDraft.cr || "1");
-          state.addDraft.hpCurrent = Math.max(0, intOr(hpCurEl?.value, state.addDraft.hpCurrent));
-          state.addDraft.hpMax = Math.max(0, intOr(hpMaxEl?.value, state.addDraft.hpMax));
-          state.addDraft.type = typeEl?.value || state.addDraft.type || "NPC";
-
-          const hpMax = Math.max(0, state.addDraft.hpMax);
-          const hpCur = clamp(Math.max(0, state.addDraft.hpCurrent), 0, hpMax);
-
+          const hpMax = Math.max(0, intOr(state.addDraft.hpMax, 10));
+          const hpCur = clamp(intOr(state.addDraft.hpCurrent, hpMax), 0, hpMax);
           const c = mkCombatant({
             name: state.addDraft.name || "New Combatant",
             type: state.addDraft.type || "NPC",
             initiative: state.addDraft.initiative,
             ac: state.addDraft.ac,
             speed: state.addDraft.speed,
-            level: state.addDraft.level,
-            cr: state.addDraft.cr,
             hpCurrent: hpCur,
             hpMax
           });
-
           state.activeCombatants.push(c);
-          sortByInitiativeDesc(state.activeCombatants);
-          if (state.turnIndex >= state.activeCombatants.length) state.turnIndex = Math.max(0, state.activeCombatants.length - 1);
+          state.activeCombatants = sortByInitiativeDesc(state.activeCombatants);
+          state.turnIndex = 0;
+          state.addDraft.name = "";
           persistAndRender();
         });
       }
-      const addNameEl = shadow.getElementById("addName");
       if (addNameEl) {
         addNameEl.addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
@@ -3457,27 +2737,17 @@ function renderEditorModal() {
           if (!p) return;
           const m = p.members.find((x) => x.id === memberId);
           if (!m) return;
-
           if (field === "name" || field === "type") {
-            m[field] = String(el.value);
-          } else if (field === "cr") {
-            m.cr = normalizeCR(el.value, m.cr || "1");
-          } else if (field === "level") {
-            m.level = normalizeLevel(el.value, m.level || 3);
+            m[field] = el.value;
           } else {
             m[field] = Math.max(0, intOr(el.value, m[field]));
-            if (field === "hpMax") m.hpCurrent = clamp(m.hpCurrent, 0, m.hpMax);
-            if (field === "hpCurrent") m.hpCurrent = clamp(m.hpCurrent, 0, m.hpMax);
-          }
-
-          if (field === "type") {
-            if (m.type === "Enemy") {
-              m.cr = normalizeCR(m.cr, "1");
-            } else {
-              m.level = normalizeLevel(m.level, 3);
+            if (field === "hpMax") {
+              m.hpCurrent = clamp(m.hpCurrent, 0, m.hpMax);
+            }
+            if (field === "hpCurrent") {
+              m.hpCurrent = clamp(m.hpCurrent, 0, m.hpMax);
             }
           }
-
           saveState(state);
         });
       });
@@ -3544,71 +2814,6 @@ function renderEditorModal() {
         });
       });
 
-      shadow.querySelectorAll("[data-open-conds]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const id = btn.getAttribute("data-open-conds");
-          if (!id) return;
-          openConditionEditor(id);
-        });
-      });
-
-      const conditionBackdrop = shadow.getElementById("conditionEditorBackdrop");
-      if (conditionBackdrop) {
-        conditionBackdrop.addEventListener("click", (e) => {
-          if (e.target === conditionBackdrop) closeConditionEditor();
-        });
-      }
-
-      const condCloseBtn = shadow.getElementById("condCloseBtn");
-      if (condCloseBtn) condCloseBtn.addEventListener("click", closeConditionEditor);
-
-      const condClearAllBtn = shadow.getElementById("condClearAllBtn");
-      if (condClearAllBtn) {
-        condClearAllBtn.addEventListener("click", () => {
-          if (!conditionEditor.cardId) return;
-          clearAllConditions(conditionEditor.cardId);
-        });
-      }
-
-      const condExhaustionInput = shadow.getElementById("condExhaustionInput");
-      if (condExhaustionInput) {
-        condExhaustionInput.addEventListener("input", () => {
-          if (!conditionEditor.cardId) return;
-          setExhaustionLevel(conditionEditor.cardId, condExhaustionInput.value);
-        });
-      }
-
-      shadow.querySelectorAll("[data-cond-toggle]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          if (!conditionEditor.cardId) return;
-          toggleCondition(conditionEditor.cardId, btn.getAttribute("data-cond-toggle"));
-        });
-      });
-
-      shadow.querySelectorAll("[data-cond-duration]").forEach((input) => {
-        input.addEventListener("input", () => {
-          if (!conditionEditor.cardId) return;
-          setConditionDuration(conditionEditor.cardId, input.getAttribute("data-cond-duration"), input.value);
-          const key = input.getAttribute("data-cond-duration");
-          const unitSelect = key ? shadow.querySelector(`[data-cond-unit="${CSS.escape(key)}"]`) : null;
-          if (unitSelect) unitSelect.disabled = !String(input.value || "").trim();
-        });
-      });
-
-      shadow.querySelectorAll("[data-cond-unit]").forEach((select) => {
-        select.addEventListener("change", () => {
-          if (!conditionEditor.cardId) return;
-          setConditionUnit(conditionEditor.cardId, select.getAttribute("data-cond-unit"), select.value);
-        });
-      });
-
-      shadow.querySelectorAll("[data-cond-remove]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          if (!conditionEditor.cardId) return;
-          removeCondition(conditionEditor.cardId, btn.getAttribute("data-cond-remove"));
-        });
-      });
-
       // drag and drop active list
       const initiativeList = shadow.getElementById("initiativeList");
       if (initiativeList) {
@@ -3653,6 +2858,83 @@ function renderEditorModal() {
       }
 
 
+  // Monster Vault picker
+  shadow.querySelectorAll("[data-open-monster-vault]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const encId = btn.getAttribute("data-open-monster-vault");
+      if (!encId) return;
+      state.monsterPickerEncounterId = encId;
+      state.monsterPickerOpen = true;
+      state.monsterPickerQuery = "";
+      state.monsterPickerCr = "all";
+      persistAndRender();
+    });
+  });
+
+  const monsterPickerBackdrop = shadow.getElementById("monsterPickerBackdrop");
+  if (monsterPickerBackdrop) {
+    monsterPickerBackdrop.addEventListener("click", (e) => {
+      if (e.target === monsterPickerBackdrop) {
+        state.monsterPickerOpen = false;
+        persistAndRender();
+      }
+    });
+  }
+
+  const monsterPickerCloseBtn = shadow.getElementById("monsterPickerCloseBtn");
+  if (monsterPickerCloseBtn) {
+    monsterPickerCloseBtn.addEventListener("click", () => {
+      state.monsterPickerOpen = false;
+      persistAndRender();
+    });
+  }
+
+  const monsterPickerSearch = shadow.getElementById("monsterPickerSearch");
+  if (monsterPickerSearch) {
+    monsterPickerSearch.addEventListener("input", () => {
+      state.monsterPickerQuery = monsterPickerSearch.value || "";
+      saveState(state);
+      render();
+    });
+  }
+
+  const monsterPickerCr = shadow.getElementById("monsterPickerCr");
+  if (monsterPickerCr) {
+    monsterPickerCr.addEventListener("change", () => {
+      state.monsterPickerCr = monsterPickerCr.value || "all";
+      saveState(state);
+      render();
+    });
+  }
+
+  shadow.querySelectorAll("[data-picker-add-monster]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const monsterId = btn.getAttribute("data-picker-add-monster");
+      const encId = state.monsterPickerEncounterId;
+      if (!monsterId || !encId) return;
+
+      const enc = state.library.find((e) => e.id === encId);
+      if (!enc) return;
+
+      const monster = monsterVaultMonsters().find((m) => m.id === monsterId);
+      if (!monster) return;
+
+      enc.combatants.push(
+        mkCombatant({
+          name: monster.name,
+          type: monster.type || "Enemy",
+          initiative: monster.initiative,
+          ac: monster.ac,
+          speed: monster.speed,
+          hpCurrent: monster.hp,
+          hpMax: monster.hp
+        })
+      );
+      enc.combatants = sortByInitiativeDesc(enc.combatants);
+      persistAndRender();
+    });
+  });
+
   // library creation and actions
   const createName = shadow.getElementById("createName");
   const createLocation = shadow.getElementById("createLocation");
@@ -3669,17 +2951,15 @@ function renderEditorModal() {
     });
   }
 
-  const quickCreateEncounterBtn = shadow.getElementById("quickCreateEncounterBtn");
-  if (quickCreateEncounterBtn) {
-    quickCreateEncounterBtn.addEventListener("click", () => {
-      const name = String(state.createName || "Untitled Encounter").trim() || "Untitled Encounter";
-      const location = String(state.createLocation || "").trim();
-      const encounter = { id: uid("e"), name, location, combatants: [] };
-      state.library.push(encounter);
-      // Quick-create should NOT auto-mark an encounter as active.
-      // Activation is an explicit action from the library row button.
-      state.libraryEditId = encounter.id;
-      state.tab = "library";
+  const createFromActiveBtn = shadow.getElementById("createFromActiveBtn");
+  if (createFromActiveBtn) {
+    createFromActiveBtn.addEventListener("click", () => {
+      const e = serializeActiveAsEncounter();
+      e.name = (state.createName || state.activeEncounterName || "New Encounter").trim() || "New Encounter";
+      e.tags = "";
+      e.location = (state.createLocation || "").trim();
+      state.library.unshift(e);
+      state.activeLibraryId = e.id;
       state.createName = "";
       state.createLocation = "";
       persistAndRender();
@@ -3715,6 +2995,10 @@ function renderEditorModal() {
       state.library = state.library.filter((e) => e.id !== id);
       if (state.activeLibraryId === id) state.activeLibraryId = null;
       if (state.libraryEditId === id) state.libraryEditId = null;
+      if (state.monsterPickerEncounterId === id) {
+        state.monsterPickerEncounterId = null;
+        state.monsterPickerOpen = false;
+      }
       persistAndRender();
     });
   });
@@ -3785,38 +3069,6 @@ function renderEditorModal() {
     });
   }
 
-  state.library.forEach((enc) => {
-    const libAddInputs = [
-      ["libAddName", "name", (v) => v],
-      ["libAddInit", "initiative", (v) => Math.max(0, intOr(v, 10))],
-      ["libAddAC", "ac", (v) => Math.max(0, intOr(v, 13))],
-      ["libAddSpeed", "speed", (v) => Math.max(0, intOr(v, 30))],
-      ["libAddLevel", "level", (v) => normalizeLevel(v, state.libraryAddDraft.level || 3)],
-      ["libAddCR", "cr", (v) => normalizeCR(v, state.libraryAddDraft.cr || "1")],
-      ["libAddHpCur", "hpCurrent", (v) => Math.max(0, intOr(v, state.libraryAddDraft.hpCurrent))],
-      ["libAddHpMax", "hpMax", (v) => Math.max(0, intOr(v, state.libraryAddDraft.hpMax))]
-    ];
-
-    libAddInputs.forEach(([baseId, key, transform]) => {
-      const el = shadow.getElementById(`${baseId}_${enc.id}`);
-      if (!el) return;
-      el.addEventListener("input", () => {
-        const next = transform(el.value);
-        if (key === "name" || key === "cr") state.libraryAddDraft[key] = String(next);
-        else state.libraryAddDraft[key] = next;
-        saveState(state);
-      });
-    });
-
-    const typeEl = shadow.getElementById(`libAddType_${enc.id}`);
-    if (typeEl) {
-      typeEl.addEventListener("change", () => {
-        state.libraryAddDraft.type = typeEl.value;
-        saveState(state);
-      });
-    }
-  });
-
   shadow.querySelectorAll("[data-lib-add-combatant]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const encId = btn.getAttribute("data-lib-add-combatant");
@@ -3834,8 +3086,6 @@ function renderEditorModal() {
         initiative: intOr(getVal("libAddInit", state.libraryAddDraft.initiative), state.libraryAddDraft.initiative),
         ac: intOr(getVal("libAddAC", state.libraryAddDraft.ac), state.libraryAddDraft.ac),
         speed: intOr(getVal("libAddSpeed", state.libraryAddDraft.speed), state.libraryAddDraft.speed),
-        level: normalizeLevel(getVal("libAddLevel", state.libraryAddDraft.level), state.libraryAddDraft.level || 3),
-        cr: normalizeCR(getVal("libAddCR", state.libraryAddDraft.cr), state.libraryAddDraft.cr || "1"),
         hpCurrent: intOr(getVal("libAddHpCur", state.libraryAddDraft.hpCurrent), state.libraryAddDraft.hpCurrent),
         hpMax: intOr(getVal("libAddHpMax", state.libraryAddDraft.hpMax), state.libraryAddDraft.hpMax)
       };
@@ -3846,8 +3096,6 @@ function renderEditorModal() {
         initiative: Math.max(0, intOr(draft.initiative, 10)),
         ac: Math.max(0, intOr(draft.ac, 13)),
         speed: Math.max(0, intOr(draft.speed, 30)),
-        level: normalizeLevel(draft.level, 3),
-        cr: normalizeCR(draft.cr, "1"),
         hpCurrent: Math.max(0, intOr(draft.hpCurrent, 10)),
         hpMax: Math.max(0, intOr(draft.hpMax, 10))
       };
@@ -3862,8 +3110,6 @@ function renderEditorModal() {
           initiative: draft.initiative,
           ac: draft.ac,
           speed: draft.speed,
-          level: draft.level,
-          cr: draft.cr,
           hpCurrent: hpCur,
           hpMax
         })
