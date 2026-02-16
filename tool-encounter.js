@@ -593,12 +593,8 @@
                 <div class="card-content">
                   <div class="name-block">
                     <div class="name-row">
-                      <input class="card-name-input" data-card-field="name" data-card-id="${esc(c.id)}" value="${esc(c.name)}" />
-                      <select class="card-type-input" data-card-field="type" data-card-id="${esc(c.id)}">
-                        <option ${c.type === "PC" ? "selected" : ""}>PC</option>
-                        <option ${c.type === "NPC" ? "selected" : ""}>NPC</option>
-                        <option ${c.type === "Enemy" ? "selected" : ""}>Enemy</option>
-                      </select>
+                      <span class="card-name">${esc(c.name)}</span>
+                      <span class="card-tag">${esc(c.type)}</span>
                     </div>
                   </div>
 
@@ -617,19 +613,13 @@
 
                   <div class="card-meta">
                     <div class="card-meta-top">
-                      <div class="meta-group meta-init-group">
-                        <span>Init</span>
-                        <input class="tiny-num" type="number" min="0" data-card-field="initiative" data-card-id="${esc(c.id)}" value="${intOr(c.initiative, 0)}">
+                      <div class="meta-init-center">
+                        <span class="meta-k">Init</span>
+                        <span class="meta-v">${intOr(c.initiative, 0)}</span>
                       </div>
-                      <div class="meta-stack">
-                        <div class="meta-group">
-                          <span>AC</span>
-                          <input class="tiny-num" type="number" min="0" data-card-field="ac" data-card-id="${esc(c.id)}" value="${c.ac}">
-                        </div>
-                        <div class="meta-group">
-                          <span>Spd</span>
-                          <input class="tiny-num" type="number" min="0" data-card-field="speed" data-card-id="${esc(c.id)}" value="${c.speed}">
-                        </div>
+                      <div class="meta-stack-read">
+                        <div class="meta-read-line"><span class="meta-k">AC</span><span class="meta-v">${c.ac}</span></div>
+                        <div class="meta-read-line"><span class="meta-k">Spd</span><span class="meta-v">${c.speed}</span></div>
                       </div>
                       <button class="btn-icon" title="Remove" data-remove-card="${esc(c.id)}">×</button>
                     </div>
@@ -715,12 +705,8 @@ function renderLibraryTab() {
                     <div class="card-content">
                       <div class="name-block">
                         <div class="name-row">
-                          <input class="card-name-input" data-lib-card-field="name" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${esc(c.name)}" />
-                          <select class="card-type-input" data-lib-card-field="type" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">
-                            <option ${c.type === "PC" ? "selected" : ""}>PC</option>
-                            <option ${c.type === "NPC" ? "selected" : ""}>NPC</option>
-                            <option ${c.type === "Enemy" ? "selected" : ""}>Enemy</option>
-                          </select>
+                          <span class="card-name">${esc(c.name)}</span>
+                          <span class="card-tag">${esc(c.type)}</span>
                         </div>
                       </div>
                       <div class="hp-block">
@@ -731,19 +717,13 @@ function renderLibraryTab() {
                       </div>
                       <div class="card-meta">
                         <div class="card-meta-top">
-                          <div class="meta-group meta-init-group">
-                            <span>Init</span>
-                            <input class="tiny-num" type="number" min="0" data-lib-card-field="initiative" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${intOr(c.initiative, 0)}">
+                          <div class="meta-init-center">
+                            <span class="meta-k">Init</span>
+                            <span class="meta-v">${intOr(c.initiative, 0)}</span>
                           </div>
-                          <div class="meta-stack">
-                            <div class="meta-group">
-                              <span>AC</span>
-                              <input class="tiny-num" type="number" min="0" data-lib-card-field="ac" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.ac}">
-                            </div>
-                            <div class="meta-group">
-                              <span>Spd</span>
-                              <input class="tiny-num" type="number" min="0" data-lib-card-field="speed" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.speed}">
-                            </div>
+                          <div class="meta-stack-read">
+                            <div class="meta-read-line"><span class="meta-k">AC</span><span class="meta-v">${c.ac}</span></div>
+                            <div class="meta-read-line"><span class="meta-k">Spd</span><span class="meta-v">${c.speed}</span></div>
                           </div>
                           <button class="btn-icon" title="Remove" data-lib-remove-card="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">×</button>
                         </div>
@@ -1173,7 +1153,7 @@ function renderEditorModal() {
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(140px,1.7fr) auto minmax(120px,1.1fr);
+          grid-template-columns: minmax(150px,1.7fr) auto minmax(106px,0.95fr);
           align-items: center;
           column-gap: 8px;
         }
@@ -1181,48 +1161,33 @@ function renderEditorModal() {
         .name-block { min-width: 0; }
         .name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 
-                .card-name-input {
+        .card-name {
           min-width: 0;
           font-weight: 640;
-          font-size: 0.87rem;
+          font-size: 0.9rem;
           letter-spacing: 0.01em;
-          padding: 3px 8px;
-          border-radius: 8px;
-          background: rgba(8, 12, 18, 0.7) !important;
-          border: 1px solid #2f3746;
           color: #eef3ff;
-          appearance: none;
-          -webkit-appearance: none;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: inline-block;
+          max-width: 100%;
         }
 
-        .card-name-input:hover {
-          background: #0d121a !important;
-          border-color: #3c4658;
+        .card-tag {
+          font-size: 0.7rem;
+          line-height: 1;
+          padding: 3px 7px;
+          border-radius: 999px;
+          border: 1px solid #303641;
+          color: var(--text-muted);
+          background: #0a0f15;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
-        .card-name-input:focus {
-          background: #0f1520 !important;
-          border-color: #7281a0;
-          box-shadow: 0 0 0 1px rgba(140,155,180,0.25);
-        }
-
-        .card-name-input:-webkit-autofill,
-        .card-name-input:-webkit-autofill:hover,
-        .card-name-input:-webkit-autofill:focus {
-          -webkit-text-fill-color: #eef3ff;
-          -webkit-box-shadow: 0 0 0px 1000px #0b0f16 inset;
-          transition: background-color 9999s ease-out 0s;
-        }
-
-        .card-type-input {
-          width: 78px;
-          min-width: 78px;
-          font-size: 0.72rem;
-          padding: 3px 6px;
-          background: #0c1118;
-          border-color: #2a3240;
-          color: #dbe3f3;
-        }
+        .pc-card .card-tag { border-color: #3b5678; color: #b8c8ff; background: #0b1420; }
+        .enemy-card .card-tag { border-color: #6b2c38; color: #ffb8c0; background: #190b10; }
 
         .hp-block {
           display: inline-flex;
@@ -1269,33 +1234,54 @@ function renderEditorModal() {
           justify-self: end;
         }
 
-        .card-meta-top { display: flex; align-items: flex-start; gap: 6px; }
-
-        .meta-group {
-          display: inline-flex;
+        .card-meta-top {
+          display: flex;
           align-items: center;
-          gap: 4px;
-          white-space: nowrap;
+          gap: 8px;
         }
 
-        .meta-group span {
-          font-size: 0.72rem;
+        .meta-k {
+          font-size: 0.68rem;
           color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
         }
 
-        .meta-stack {
+        .meta-v {
+          font-size: 0.82rem;
+          color: #e6edf8;
+          font-weight: 650;
+          line-height: 1;
+        }
+
+        .meta-init-center {
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-width: 44px;
+          gap: 2px;
+          align-self: center;
+          padding-top: 1px;
+        }
+
+        .meta-stack-read {
           display: flex;
           flex-direction: column;
-          gap: 3px;
-          margin-top: -1px;
+          gap: 4px;
+          min-width: 64px;
         }
 
-        .meta-init-group {
-          min-width: 102px;
+        .meta-read-line {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          min-width: 64px;
         }
 
         .card-meta-top .btn-icon {
-          margin-left: auto;
+          margin-left: 2px;
           align-self: center;
         }
 
@@ -1664,13 +1650,9 @@ function renderEditorModal() {
           const field = el.getAttribute("data-card-field");
           const c = state.activeCombatants.find((x) => x.id === id);
           if (!c) return;
-          if (field === "name" || field === "type") {
-            c[field] = el.value;
-          } else {
-            c[field] = Math.max(0, intOr(el.value, c[field]));
-            if (field === "hpMax") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
-            if (field === "hpCurrent") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
-          }
+          c[field] = Math.max(0, intOr(el.value, c[field]));
+          if (field === "hpMax") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
+          if (field === "hpCurrent") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
           saveState(state);
         });
       });
@@ -1840,13 +1822,9 @@ function renderEditorModal() {
       if (!enc) return;
       const c = enc.combatants.find((x) => x.id === cardId);
       if (!c) return;
-      if (field === "name" || field === "type") {
-        c[field] = el.value;
-      } else {
-        c[field] = Math.max(0, intOr(el.value, c[field]));
-        if (field === "hpMax") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
-        if (field === "hpCurrent") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
-      }
+      c[field] = Math.max(0, intOr(el.value, c[field]));
+      if (field === "hpMax") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
+      if (field === "hpCurrent") c.hpCurrent = clamp(c.hpCurrent, 0, c.hpMax);
       saveState(state);
     });
   });
