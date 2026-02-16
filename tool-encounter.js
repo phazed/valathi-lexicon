@@ -778,6 +778,539 @@
       persistAndRender();
     }
 
+    function persistAndRender() {
+      saveState(state);
+      render();
+    }
+
+    function sortByInitiativeDesc(arr) {
+      return [...arr].sort((a, b) => {
+        const diff = intOr(b.initiative, 0) - intOr(a.initiative, 0);
+        return diff;
+      });
+    }
+
+    function moveItem(arr, fromId, toId) {
+      if (!Array.isArray(arr) || !fromId || !toId || fromId === toId) return arr;
+      const from = arr.findIndex((x) => x.id === fromId);
+      const to = arr.findIndex((x) => x.id === toId);
+      if (from < 0 || to < 0) return arr;
+      const copy = [...arr];
+      const [item] = copy.splice(from, 1);
+      copy.splice(to, 0, item);
+      return copy;
+    }
+
+    function moveToEnd(arr, fromId) {
+      const i = arr.findIndex((x) => x.id === fromId);
+      if (i < 0) return arr;
+      const copy = [...arr];
+      const [item] = copy.splice(i, 1);
+      copy.push(item);
+      return copy;
+    }
+
+    function serializeActiveAsEncounter(existing = null) {
+      const baseName = state.activeEncounterName?.trim() || "Current Encounter";
+      return {
+        id: existing?.id || uid("enc"),
+        name: existing?.name || baseName,
+        tags: existing?.tags || "",
+        location: existing?.location || "",
+        combatants: state.activeCombatants.map((c) => cloneCombatant(c, true))
+      };
+    }
+
+    function getEncounterDifficulty(combatants = state.activeCombatants) {
+      const roster = Array.isArray(combatants) ? combatants : [];
+      const allies = roster.filter((c) => c.type !== "Enemy");
+      const enemies = roster.filter((c) => c.type === "Enemy");
+
+      const partyLevels = allies.map((c) => normalizeLevel(c.level, 1));
+      const partyCount = partyLevels.length;
+      const enemyCount = enemies.length;
+      const enemyXP = enemies.reduce((sum, c) => sum + crToXP(c.cr), 0);
+
+      const budget = partyLevels.reduce(
+        (acc, lv) => {
+          const row = XP_BUDGET_2024_BY_LEVEL[lv] || XP_BUDGET_2024_BY_LEVEL[1];
+          acc.low += row.low;
+          acc.moderate += row.moderate;
+          acc.high += row.high;
+          return acc;
+        },
+        { low: 0, moderate: 0, high: 0 }
+      );
+
+      let tier = "Not enough data";
+      let tierClass = "tier-none";
+
+      if (!partyCount || !enemyCount) {
+        tier = !partyCount ? "Add PCs/NPCs with levels" : "Add enemies with CR";
+      } else if (enemyXP <= budget.low) {
+        tier = "Low";
+        tierClass = "tier-low";
+      } else if (enemyXP <= budget.moderate) {
+        tier = "Moderate";
+        tierClass = "tier-moderate";
+      } else if (enemyXP <= budget.high) {
+        tier = "High";
+        tierClass = "tier-high";
+      } else if (enemyXP <= budget.high * 1.5) {
+        tier = "Above High";
+        tierClass = "tier-above";
+      } else {
+        tier = "Extreme";
+        tierClass = "tier-extreme";
+      }
+
+      const pctOfHigh = budget.high > 0 ? Math.round((enemyXP / budget.high) * 100) : 0;
+      const lowPct = budget.high > 0 ? Math.round((budget.low / budget.high) * 100) : 0;
+      const moderatePct = budget.high > 0 ? Math.round((budget.moderate / budget.high) * 100) : 0;
+
+      return {
+        partyCount,
+        enemyCount,
+        enemyXP,
+        budget,
+        tier,
+        tierClass,
+        pctOfHigh: clamp(pctOfHigh, 0, 300),
+        lowPct: clamp(lowPct, 0, 100),
+        moderatePct: clamp(moderatePct, 0, 100)
+      };
+    }
+
+    function getSelectedParty() {
+      return state.parties.find((p) => p.id === state.selectedPartyId) || null;
+    }
+
+    function currentTurnName() {
+      if (!state.activeCombatants.length) return "—";
+      const idx = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
+      return state.activeCombatants[idx]?.name || "—";
+    }
+
+    function tagClass(type) {
+      if (type === "PC") return "pc-card";
+      if (type === "Enemy") return "enemy-card";
+      return "npc-card";
+    }
+
+    function initials(name) {
+      const s = String(name || "?").trim();
+      if (!s) return "?";
+      const parts = s.split(/\s+/).slice(0, 2);
+      return parts.map((p) => p.charAt(0).toUpperCase()).join("");
+    }
+
+    function portraitMarkup(c, scope, refId = null) {
+      const hasPortrait = !!c.portrait;
+      const style = hasPortrait ? ` style="background-image:url('${esc(c.portrait)}')"` : "";
+      const encAttr = scope === "library" && refId ? ` data-lib-enc-id="${esc(refId)}"` : "";
+      const partyAttr = scope === "party" && refId ? ` data-party-id="${esc(refId)}"` : "";
+      return `
+        <button
+          type="button"
+          class="card-portrait ${hasPortrait ? "has-image" : ""}"
+          title="Edit portrait"
+          data-portrait-upload
+          data-scope="${esc(scope)}"
+          data-card-id="${esc(c.id)}"
+          ${encAttr}
+          ${partyAttr}
+          ${style}
+        >
+          ${hasPortrait ? "" : esc(initials(c.name))}
+          <span class="portrait-badge" aria-hidden="true">📷</span>
+        </button>
+      `;
+    }
+
+    function getTargetCombatant(target) {
+      if (!target || !target.scope || !target.cardId) return null;
+      if (target.scope === "active") {
+        return state.activeCombatants.find((c) => c.id === target.cardId) || null;
+      }
+      if (target.scope === "library") {
+        const enc = state.library.find((e) => e.id === target.encId);
+        if (!enc) return null;
+        return enc.combatants.find((c) => c.id === target.cardId) || null;
+      }
+      if (target.scope === "party") {
+        const party = state.parties.find((p) => p.id === target.partyId) || getSelectedParty();
+        if (!party) return null;
+        return party.members.find((m) => m.id === target.cardId) || null;
+      }
+      return null;
+    }
+
+    function openPortraitEditor(target) {
+      const combatant = getTargetCombatant(target);
+      if (!combatant) return;
+      portraitEditor.open = true;
+      portraitEditor.target = {
+        scope: target.scope,
+        cardId: target.cardId,
+        encId: target.encId || null,
+        partyId: target.partyId || null
+      };
+      portraitEditor.dragging = false;
+      portraitEditor.pointerId = null;
+      loadPortraitEditorImage(combatant.portrait || "", true);
+      render();
+    }
+
+    function closePortraitEditor(shouldRender = true) {
+      portraitEditor.open = false;
+      portraitEditor.target = null;
+      portraitEditor.source = "";
+      portraitEditor.image = null;
+      portraitEditor.zoom = PORTRAIT_EDITOR_MIN_ZOOM;
+      portraitEditor.offsetX = 0;
+      portraitEditor.offsetY = 0;
+      portraitEditor.dragging = false;
+      portraitEditor.pointerId = null;
+      if (shouldRender) render();
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("Failed to read image"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function resizeImageDataUrl(dataUrl, maxDimension = 256, quality = 0.84) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const srcW = img.naturalWidth || img.width || 1;
+            const srcH = img.naturalHeight || img.height || 1;
+            const ratio = Math.min(1, maxDimension / Math.max(srcW, srcH));
+            const width = Math.max(1, Math.round(srcW * ratio));
+            const height = Math.max(1, Math.round(srcH * ratio));
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(dataUrl);
+              return;
+            }
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, width, height);
+
+            let out = "";
+            try {
+              out = canvas.toDataURL("image/webp", quality);
+            } catch (_) {}
+            if (!out || out === "data:,") {
+              try {
+                out = canvas.toDataURL("image/jpeg", quality);
+              } catch (_) {}
+            }
+
+            resolve(out || dataUrl);
+          } catch (_) {
+            resolve(dataUrl);
+          }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      });
+    }
+
+    function loadPortraitEditorImage(dataUrl, reset = true) {
+      const normalized = normalizePortrait(dataUrl);
+      portraitEditor.source = normalized;
+      portraitEditor.image = null;
+      portraitEditor.zoom = PORTRAIT_EDITOR_MIN_ZOOM;
+      if (reset) {
+        portraitEditor.offsetX = 0;
+        portraitEditor.offsetY = 0;
+      }
+
+      if (!normalized) {
+        drawPortraitEditorCanvas();
+        const saveBtn = shadow.getElementById("portraitEditorSaveBtn");
+        if (saveBtn) saveBtn.disabled = true;
+        return;
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        portraitEditor.image = img;
+        clampPortraitEditorOffsets();
+        drawPortraitEditorCanvas();
+        const saveBtn = shadow.getElementById("portraitEditorSaveBtn");
+        if (saveBtn) saveBtn.disabled = false;
+      };
+      img.onerror = () => {
+        portraitEditor.image = null;
+        drawPortraitEditorCanvas();
+        const saveBtn = shadow.getElementById("portraitEditorSaveBtn");
+        if (saveBtn) saveBtn.disabled = true;
+      };
+      img.src = normalized;
+    }
+
+    function clampPortraitEditorOffsets() {
+      const m = portraitEditorMetrics();
+      portraitEditor.offsetX = clamp(portraitEditor.offsetX, -m.maxOffsetX, m.maxOffsetX);
+      portraitEditor.offsetY = clamp(portraitEditor.offsetY, -m.maxOffsetY, m.maxOffsetY);
+    }
+
+    function portraitEditorMetrics() {
+      const img = portraitEditor.image;
+      const size = PORTRAIT_EDITOR_PREVIEW_SIZE;
+      if (!img) {
+        return {
+          size,
+          cx: size / 2,
+          cy: size / 2,
+          r: size * 0.485,
+          drawW: 0,
+          drawH: 0,
+          x: 0,
+          y: 0,
+          maxOffsetX: 0,
+          maxOffsetY: 0
+        };
+      }
+
+      const srcW = img.naturalWidth || img.width || 1;
+      const srcH = img.naturalHeight || img.height || 1;
+      const baseScale = Math.max(size / srcW, size / srcH);
+      const scale = baseScale * clamp(Number(portraitEditor.zoom) || 1, PORTRAIT_EDITOR_MIN_ZOOM, PORTRAIT_EDITOR_MAX_ZOOM);
+      const drawW = srcW * scale;
+      const drawH = srcH * scale;
+      const maxOffsetX = Math.max(0, (drawW - size) / 2);
+      const maxOffsetY = Math.max(0, (drawH - size) / 2);
+      const offsetX = clamp(portraitEditor.offsetX, -maxOffsetX, maxOffsetX);
+      const offsetY = clamp(portraitEditor.offsetY, -maxOffsetY, maxOffsetY);
+
+      return {
+        size,
+        cx: size / 2,
+        cy: size / 2,
+        r: size * 0.485,
+        drawW,
+        drawH,
+        x: size / 2 - drawW / 2 + offsetX,
+        y: size / 2 - drawH / 2 + offsetY,
+        maxOffsetX,
+        maxOffsetY
+      };
+    }
+
+    function drawPortraitEditorCanvas() {
+      const canvas = shadow.getElementById("portraitEditorCanvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const m = portraitEditorMetrics();
+      canvas.width = m.size;
+      canvas.height = m.size;
+
+      ctx.clearRect(0, 0, m.size, m.size);
+      ctx.fillStyle = "#080b11";
+      ctx.fillRect(0, 0, m.size, m.size);
+
+      if (portraitEditor.image) {
+        clampPortraitEditorOffsets();
+        const mm = portraitEditorMetrics();
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(portraitEditor.image, mm.x, mm.y, mm.drawW, mm.drawH);
+      } else {
+        ctx.fillStyle = "#8f98a8";
+        ctx.font = "600 13px system-ui, -apple-system, Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("No image selected", m.cx, m.cy);
+      }
+
+      ctx.save();
+      ctx.fillStyle = "rgba(4, 6, 10, 0.62)";
+      ctx.beginPath();
+      ctx.rect(0, 0, m.size, m.size);
+      ctx.moveTo(m.cx + m.r, m.cy);
+      ctx.arc(m.cx, m.cy, m.r, 0, Math.PI * 2, true);
+      ctx.fill("evenodd");
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(m.cx, m.cy, m.r, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(236, 242, 255, 0.95)";
+      ctx.stroke();
+    }
+
+    function exportPortraitFromEditor() {
+      if (!portraitEditor.image) return "";
+
+      const out = document.createElement("canvas");
+      out.width = PORTRAIT_EDITOR_EXPORT_SIZE;
+      out.height = PORTRAIT_EDITOR_EXPORT_SIZE;
+      const ctx = out.getContext("2d");
+      if (!ctx) return "";
+
+      const m = portraitEditorMetrics();
+      const ratio = PORTRAIT_EDITOR_EXPORT_SIZE / m.size;
+
+      ctx.clearRect(0, 0, out.width, out.height);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(out.width / 2, out.height / 2, out.width / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(
+        portraitEditor.image,
+        m.x * ratio,
+        m.y * ratio,
+        m.drawW * ratio,
+        m.drawH * ratio
+      );
+      ctx.restore();
+
+      let data = "";
+      try {
+        data = out.toDataURL("image/webp", 0.92);
+      } catch (_) {
+        data = "";
+      }
+      if (!data || data === "data:,") {
+        try {
+          data = out.toDataURL("image/png");
+        } catch (_) {
+          data = "";
+        }
+      }
+      return normalizePortrait(data);
+    }
+
+    function savePortraitFromEditor() {
+      if (!portraitEditor.target) return;
+      const combatant = getTargetCombatant(portraitEditor.target);
+      if (!combatant) {
+        closePortraitEditor();
+        return;
+      }
+      const data = exportPortraitFromEditor();
+      if (!data) return;
+      combatant.portrait = data;
+      closePortraitEditor(false);
+      persistAndRender();
+    }
+
+    function removePortraitFromEditor() {
+      if (!portraitEditor.target) {
+        closePortraitEditor();
+        return;
+      }
+      const combatant = getTargetCombatant(portraitEditor.target);
+      if (!combatant) {
+        closePortraitEditor();
+        return;
+      }
+      combatant.portrait = "";
+      closePortraitEditor(false);
+      persistAndRender();
+    }
+
+    async function processPortraitFile(file) {
+      if (!file) return "";
+      const raw = await readFileAsDataUrl(file);
+      if (!/^data:image\//i.test(raw)) return "";
+      const optimized = await resizeImageDataUrl(raw, 1024, 0.9);
+      return normalizePortrait(optimized || raw);
+    }
+
+    function renderTopTabs() {
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div class="tabs-row">
+            <button class="tab ${state.tab === "active" ? "active" : ""}" data-tab="active">Active Encounter</button>
+            <button class="tab ${state.tab === "library" ? "active" : ""}" data-tab="library">Encounter Library</button>
+          </div>
+          <div class="hint-text">Use this for combat, chases, stealth runs, or social scenes with turns.</div>
+        </div>
+      `;
+    }
+
+    function renderPortraitEditorModal() {
+      if (!portraitEditor.open) return "";
+      const targetCombatant = getTargetCombatant(portraitEditor.target);
+      const hasPortrait = !!targetCombatant?.portrait;
+      const hasDraftImage = !!portraitEditor.source;
+      const canRemove = hasPortrait || hasDraftImage;
+
+      return `
+        <div class="portrait-editor-backdrop" id="portraitEditorBackdrop">
+          <div class="portrait-editor-modal" role="dialog" aria-modal="true" aria-label="Portrait editor">
+            <div class="portrait-editor-head">
+              <div class="portrait-editor-title">Portrait Editor</div>
+              <div class="hint-text">Drag to reposition · Zoom to frame</div>
+            </div>
+
+            <div class="portrait-editor-canvas-wrap">
+              <canvas id="portraitEditorCanvas" width="${PORTRAIT_EDITOR_PREVIEW_SIZE}" height="${PORTRAIT_EDITOR_PREVIEW_SIZE}" aria-label="Portrait crop preview"></canvas>
+            </div>
+
+            <div class="portrait-editor-controls">
+              <label for="portraitEditorZoom">Zoom</label>
+              <input id="portraitEditorZoom" type="range" min="${PORTRAIT_EDITOR_MIN_ZOOM}" max="${PORTRAIT_EDITOR_MAX_ZOOM}" step="0.01" value="${Number(portraitEditor.zoom || 1).toFixed(2)}">
+            </div>
+
+            <div class="portrait-editor-actions">
+              <button type="button" class="btn btn-secondary btn-xs" id="portraitEditorCancelBtn">Cancel</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="portraitEditorUploadBtn">Choose image</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="portraitEditorRemoveBtn" ${canRemove ? "" : "disabled"}>Remove image</button>
+              <button type="button" class="btn btn-xs" id="portraitEditorSaveBtn" ${portraitEditor.image ? "" : "disabled"}>Save portrait</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openEditor(encounter) {
+      const enc = encounter || { id: null, name: "", tags: "", location: "", combatants: [] };
+      state.editorOpen = true;
+      state.editorEncounterId = enc.id || null;
+      state.editor = {
+        name: enc.name || "",
+        tags: enc.tags || "",
+        location: enc.location || "",
+        combatants: (enc.combatants || []).map((c) => cloneCombatant(c, true)),
+        addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10, level: 3, cr: "1" }
+      };
+      persistAndRender();
+    }
+
+    function closeEditor() {
+      state.editorOpen = false;
+      state.editorEncounterId = null;
+      persistAndRender();
+    }
+
+    function ensureTurnIndex() {
+      if (!state.activeCombatants.length) {
+        state.turnIndex = 0;
+      } else {
+        state.turnIndex = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
+      }
+    }
+
     function renderConditionBadges(c) {
       const chips = [];
       (c.conditions || []).forEach((cond) => {
