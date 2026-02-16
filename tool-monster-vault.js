@@ -1,4 +1,4 @@
-// vault-fix-r3
+// vault-fix-r4
 // tool-monster-vault.js
 (() => {
   const TOOL_ID = "monsterVaultTool";
@@ -836,9 +836,10 @@
     return merged;
   }
 
+
   function publishApi() {
-    window.VrahuneMonsterVault = {
-      version: 2,
+    const api = {
+      version: 3,
       getAllMonsters() {
         return allMonsters().map((m) => JSON.parse(JSON.stringify(m)));
       },
@@ -898,15 +899,39 @@
       }
     };
 
-    // Compatibility aliases for older integrations.
-    window.MonsterVault = window.VrahuneMonsterVault;
-    window.vrahuneMonsterVault = window.VrahuneMonsterVault;
+    // Add compatibility data fields for older tools that expect direct arrays.
+    const indexSnapshot = api.getMonsterIndex();
+    const allSnapshot = api.getAllMonsters();
+    api.monsters = allSnapshot;
+    api.items = indexSnapshot;
+    api.index = indexSnapshot;
+    api.data = allSnapshot;
+    api.results = indexSnapshot;
 
-    window.dispatchEvent(new CustomEvent("vrahune-monster-vault-updated"));
-    window.dispatchEvent(new CustomEvent("vrahune-monster-vault-ready"));
+    window.VrahuneMonsterVault = api;
+
+    // Compatibility aliases for older integrations.
+    window.MonsterVault = api;
+    window.vrahuneMonsterVault = api;
+
+    // Cross-tool snapshots to avoid empty picker if an integration grabs globals before api methods.
+    window.__vrahuneMonsterVaultIndex = indexSnapshot;
+    window.__vrahuneMonsterVaultMonsters = allSnapshot;
+    window.__vrahuneMonsterVaultVersion = api.version;
+
+    const detail = {
+      total: indexSnapshot.length,
+      homebrew: state.homebrew.length,
+      srd: Math.max(0, indexSnapshot.length - state.homebrew.length),
+      version: api.version
+    };
+
+    window.dispatchEvent(new CustomEvent("vrahune-monster-vault-updated", { detail }));
+    window.dispatchEvent(new CustomEvent("vrahune-monster-vault-ready", { detail }));
   }
 
   function renderFeatureList(label, list) {
+
     const arr = Array.isArray(list) ? list : [];
     if (!arr.length) return "";
 
