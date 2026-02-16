@@ -1160,6 +1160,12 @@ function renderEditorModal() {
           cursor: grab;
         }
 
+        .card .inline-input,
+        .card input,
+        .card select {
+          cursor: text;
+        }
+
         .card.dragging { opacity: 0.45; }
 
         .pc-card { background: linear-gradient(120deg, #0b101c, #05070c); border-color: #2e3b57; }
@@ -1195,7 +1201,13 @@ function renderEditorModal() {
         }
 
         .name-block { min-width: 0; }
-        .name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+        .name-row {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 6px;
+          min-width: 0;
+        }
 
         .card-name {
           min-width: 0;
@@ -1215,7 +1227,7 @@ function renderEditorModal() {
           align-items: center;
           min-width: 0;
           max-width: 100%;
-          cursor: text;
+          cursor: inherit;
         }
 
         .inline-view {
@@ -1223,6 +1235,7 @@ function renderEditorModal() {
           align-items: center;
           min-width: 0;
           max-width: 100%;
+          cursor: inherit;
         }
 
         .inline-input {
@@ -1244,7 +1257,22 @@ function renderEditorModal() {
           display: inline-flex;
         }
 
-        .inline-edit-name { flex: 1; }
+
+        .inline-edit.editing,
+        .inline-edit.editing .inline-view,
+        .inline-edit.editing .inline-input {
+          cursor: text;
+        }
+
+        .card:active {
+          cursor: grabbing;
+        }
+
+        .inline-edit-name {
+          flex: 0 1 auto;
+          min-width: 0;
+          max-width: calc(100% - 58px);
+        }
 
         .inline-input-name {
           width: min(260px, 100%);
