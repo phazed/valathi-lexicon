@@ -272,16 +272,39 @@
   }
 
   function monsterVaultApi() {
-    const candidates = [
-      window.VrahuneMonsterVault,
-      window.MonsterVault,
-      window.vrahuneMonsterVault
-    ];
-    for (const candidate of candidates) {
-      if (isMonsterVaultLike(candidate)) return candidate;
-    }
-    return null;
+  const candidates = [
+    window.VrahuneMonsterVault,
+    window.MonsterVault,
+    window.vrahuneMonsterVault
+  ];
+  for (const candidate of candidates) {
+    if (isMonsterVaultLike(candidate)) return candidate;
   }
+
+  // Fallback for older/partial vault builds that only expose snapshots
+  const snapIndex = pickArrayish(window.__vrahuneMonsterVaultIndex);
+  const snapAll = pickArrayish(window.__vrahuneMonsterVaultMonsters);
+
+  if (snapIndex.length || snapAll.length) {
+    return {
+      monsters: snapAll,
+      items: snapIndex,
+      index: snapIndex,
+      data: snapAll,
+      results: snapIndex,
+      list: snapIndex,
+      getMonsterIndex() {
+        return snapIndex;
+      },
+      getAllMonsters() {
+        return snapAll.length ? snapAll : snapIndex;
+      }
+    };
+  }
+
+  return null;
+}
+
 
   function pickArrayish(payload) {
     if (Array.isArray(payload)) return payload;
