@@ -598,9 +598,183 @@
     }
   }
 
-  function hasMonsterDetails(c) {
-    if (!c || c.type !== "Enemy") return false;
+  function isMonsterCombatant(c) {
+    return !!c && c.type === "Enemy";
+  }
+
+  function hasMonsterFeatureGroups(c) {
+    if (!isMonsterCombatant(c)) return false;
     return [c.traits, c.actions, c.bonusActions, c.reactions, c.legendaryActions].some((arr) => Array.isArray(arr) && arr.length);
+  }
+
+  function hasMonsterStatBlock(c) {
+    if (!isMonsterCombatant(c)) return false;
+    const d = c?.details && typeof c.details === "object" ? c.details : null;
+    if (!d) return false;
+
+    const hasAbilityScores =
+      d.abilityScores &&
+      typeof d.abilityScores === "object" &&
+      ["str", "dex", "con", "int", "wis", "cha"].some((k) => Number.isFinite(Number(d.abilityScores[k])));
+
+    const textFields = [
+      d.savingThrows,
+      d.skills,
+      d.damageVulnerabilities,
+      d.damageResistances,
+      d.damageImmunities,
+      d.conditionImmunities,
+      d.senses,
+      d.languages,
+      d.challengeNote
+    ].some((v) => toPlainText(v).trim());
+
+    const hasFeatureArrays = [
+      d.traits,
+      d.actions,
+      d.bonusActions,
+      d.reactions,
+      d.legendaryActions
+    ].some((arr) => Array.isArray(arr) && arr.length);
+
+    return hasAbilityScores || textFields || hasFeatureArrays || d.proficiencyBonus != null;
+  }
+
+  function hasMonsterDetails(c) {
+    return hasMonsterFeatureGroups(c);
+  }
+
+  function hasMonsterInfo(c) {
+    return isMonsterCombatant(c) && (hasMonsterFeatureGroups(c) || hasMonsterStatBlock(c) || !!c?.sourceMonsterId || !!c?.sourceMonsterName);
+  }
+
+  function signedInt(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "0";
+    return n >= 0 ? `+${Math.trunc(n)}` : `${Math.trunc(n)}`;
+  }
+
+  function abilityMod(score) {
+    const n = Number(score);
+    if (!Number.isFinite(n)) return 0;
+    return Math.floor((n - 10) / 2);
+  }
+
+  function monsterKeyFromAny(monster) {
+    if (!monster || typeof monster !== "object") return "";
+    const rawId =
+      monster.id ??
+      monster.index ??
+      monster.slug ??
+      monster.key ??
+      monster.monsterId ??
+      monster.monster_id;
+
+    let id = String(rawId || "").trim();
+
+    if (!id && typeof monster.url === "string") {
+      const parts = monster.url.split("/").filter(Boolean);
+      id = String(parts[parts.length - 1] || "").trim();
+    }
+
+    if (!id && typeof monster.name === "string") {
+      id = monster.name
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[’']/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    return id;
+  }
+
+  function normalizeFeatureEntries(list) {
+    return (Array.isArray(list) ? list : [])
+      .map((entry) => {
+        const name = toPlainText(entry?.name).trim();
+        const text = toPlainText(entry?.text ?? entry?.description ?? entry?.desc ?? entry?.effect ?? entry?.entries ?? entry).trim();
+        if (!name && !text) return null;
+        return { name: name || "Feature", text };
+      })
+      .filter(Boolean);
+  }
+
+  async function ensureMonsterDataForCard(card) {
+    if (!isMonsterCombatant(card)) return false;
+    if (hasMonsterFeatureGroups(card) || hasMonsterStatBlock(card)) return false;
+
+    const api = monsterVaultApi();
+    if (!api) return false;
+
+    const idKey = String(card.sourceMonsterId || "").trim();
+    let raw = null;
+
+    if (idKey && typeof api.getMonsterById === "function") {
+      try {
+        raw = await Promise.resolve(api.getMonsterById(idKey));
+      } catch (_) {
+        raw = null;
+      }
+    }
+
+    const vaultList = getVaultRawList(api);
+    if ((!raw || typeof raw !== "object") && idKey) {
+      raw = vaultList.find((m) => monsterKeyFromAny(m) === idKey) || null;
+    }
+
+    if ((!raw || typeof raw !== "object") && (card.sourceMonsterName || card.name)) {
+      const n = String(card.sourceMonsterName || card.name || "").trim().toLowerCase();
+      raw =
+        vaultList.find((m) => String(m?.name || "").trim().toLowerCase() === n) ||
+        null;
+    }
+
+    if (!raw || typeof raw !== "object") return false;
+
+    const hydrated = toEncounterFromRawMonster(raw, idKey || card.sourceMonsterName || card.name);
+    let changed = false;
+
+    if ((!card.details || typeof card.details !== "object") && hydrated.details && typeof hydrated.details === "object") {
+      card.details = hydrated.details;
+      changed = true;
+    }
+
+    ["traits", "actions", "bonusActions", "reactions", "legendaryActions"].forEach((field) => {
+      const cur = Array.isArray(card[field]) ? card[field] : [];
+      const next = Array.isArray(hydrated[field]) ? hydrated[field] : [];
+      if (!cur.length && next.length) {
+        card[field] = next;
+        changed = true;
+      }
+    });
+
+    if (!card.sourceMonsterId && hydrated.sourceMonsterId) {
+      card.sourceMonsterId = hydrated.sourceMonsterId;
+      changed = true;
+    }
+
+    if (!card.sourceMonsterName && hydrated.sourceMonsterName) {
+      card.sourceMonsterName = hydrated.sourceMonsterName;
+      changed = true;
+    }
+
+    if (!card.source && hydrated.source) {
+      card.source = hydrated.source;
+      changed = true;
+    }
+
+    if (!card.sizeType && hydrated.sizeType) {
+      card.sizeType = hydrated.sizeType;
+      changed = true;
+    }
+
+    if ((!card.xp || card.xp <= 0) && hydrated.xp > 0) {
+      card.xp = hydrated.xp;
+      changed = true;
+    }
+
+    return changed;
   }
 
   window.addEventListener("vrahune-monster-vault-updated", () => {
@@ -676,7 +850,8 @@
       bonusActions,
       reactions,
       legendaryActions,
-      showMonsterDetails: !!raw.showMonsterDetails
+      showMonsterDetails: !!raw.showMonsterDetails,
+      showMonsterStatBlock: !!raw.showMonsterStatBlock
     };
   }
 
@@ -1731,54 +1906,172 @@
       }
     }
 
-    function getConditionBadges(c) {
-      const badges = [];
-
-      (Array.isArray(c?.conditions) ? c.conditions : []).forEach((cond) => {
-        const name = String(cond?.name || "").trim();
-        if (!name) return;
-        const duration = Math.max(0, intOr(cond?.duration, 0));
-        badges.push(duration > 0 ? `${name} · ${duration}r` : name);
+    function renderConditionPopover(c) {
+      const chips = [];
+      (c.conditions || []).forEach((cond) => {
+        const label = cond.duration ? `${cond.name} · ${cond.duration}r` : cond.name;
+        const tip = CONDITION_INFO_2024[cond.name] || "";
+        chips.push(`<span class="condition-chip" title="${esc(tip)}">${esc(label)}</span>`);
       });
-
-      const exhaustion = Math.max(0, intOr(c?.exhaustionLevel, 0));
-      if (exhaustion > 0) badges.push(`Exhaustion ${exhaustion}`);
-
-      return badges;
-    }
-
-    function renderConditionColumn(c) {
-      const badges = getConditionBadges(c);
-      const chips = badges.length
-        ? badges.map((text) => `<span class="enc-cond-chip">${esc(text)}</span>`).join("")
-        : `<span class="enc-cond-none">None</span>`;
-
+      if ((c.exhaustionLevel || 0) > 0) {
+        chips.push(`<span class="condition-chip exhaustion" title="${esc(CONDITION_INFO_2024.Exhaustion)}">Exhaustion ${c.exhaustionLevel}</span>`);
+      }
+      if (!chips.length) return "";
       return `
-        <div class="condition-column" aria-label="Conditions">
-          <span class="condition-title">Conditions</span>
-          <div class="condition-chip-wrap">${chips}</div>
+        <div class="condition-pop-wrap" title="Active conditions">
+          <span class="condition-pop-trigger">Cond ${chips.length}</span>
+          <div class="condition-pop-panel">${chips.join("")}</div>
         </div>
       `;
     }
 
-    // Legacy output location (right-side meta) intentionally blank now.
-    function renderConditionPopover(c) {
-      return "";
-    }
-
     function renderMonsterDetailsPanel(c) {
-      if (!hasMonsterDetails(c) || !c.showMonsterDetails) return "";
+      if (!isMonsterCombatant(c) || !c.showMonsterDetails) return "";
       const groups = [
-        { title: "Traits", entries: c.traits || [] },
-        { title: "Actions", entries: c.actions || [] },
-        { title: "Bonus Actions", entries: c.bonusActions || [] },
-        { title: "Reactions", entries: c.reactions || [] },
-        { title: "Legendary", entries: c.legendaryActions || [] }
+        { title: "Traits", entries: normalizeFeatureEntries(c.traits) },
+        { title: "Actions", entries: normalizeFeatureEntries(c.actions) },
+        { title: "Bonus Actions", entries: normalizeFeatureEntries(c.bonusActions) },
+        { title: "Reactions", entries: normalizeFeatureEntries(c.reactions) },
+        { title: "Legendary", entries: normalizeFeatureEntries(c.legendaryActions) }
       ].filter((g) => Array.isArray(g.entries) && g.entries.length);
 
-      if (!groups.length) return "";
+      if (!groups.length) {
+        return `
+          <div class="monster-details">
+            <div class="monster-detail-group">
+              <div class="monster-detail-title">Monster Details</div>
+              <div class="monster-detail-entry">
+                <span class="monster-detail-text">No expanded feature list found for this monster yet.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
       return `
         <div class="monster-details">
+          ${groups
+            .map(
+              (group) => `
+                <div class="monster-detail-group">
+                  <div class="monster-detail-title">${esc(group.title)}</div>
+                  ${group.entries
+                    .map(
+                      (entry) => `
+                        <div class="monster-detail-entry">
+                          <span class="monster-detail-name">${esc(toPlainText(entry?.name) || "Feature")}</span>
+                          <span class="monster-detail-text">${esc(toPlainText(entry?.text ?? entry?.description ?? entry))}</span>
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      `;
+    }
+
+    function renderMonsterStatBlockPanel(c) {
+      if (!isMonsterCombatant(c) || !c.showMonsterStatBlock) return "";
+
+      const d = c?.details && typeof c.details === "object" ? c.details : {};
+      const abilities = d?.abilityScores && typeof d.abilityScores === "object" ? d.abilityScores : {};
+      const abilityKeys = ["str", "dex", "con", "int", "wis", "cha"];
+
+      const abilityCells = abilityKeys
+        .map((key) => {
+          const raw = Number(abilities[key]);
+          if (!Number.isFinite(raw)) return "";
+          const score = clamp(Math.trunc(raw), 1, 30);
+          const mod = abilityMod(score);
+          return `
+            <div class="monster-stat-ability-cell">
+              <span class="monster-stat-ability-key">${key.toUpperCase()}</span>
+              <span class="monster-stat-ability-score">${score}</span>
+              <span class="monster-stat-ability-mod">(${signedInt(mod)})</span>
+            </div>
+          `;
+        })
+        .filter(Boolean)
+        .join("");
+
+      const miscRows = [
+        ["Saving Throws", d.savingThrows],
+        ["Skills", d.skills],
+        ["Damage Vulnerabilities", d.damageVulnerabilities],
+        ["Damage Resistances", d.damageResistances],
+        ["Damage Immunities", d.damageImmunities],
+        ["Condition Immunities", d.conditionImmunities],
+        ["Senses", d.senses],
+        ["Languages", d.languages],
+        ["Challenge", d.challengeNote]
+      ]
+        .map(([k, v]) => [k, toPlainText(v).trim()])
+        .filter(([, v]) => v);
+
+      const groups = [
+        { title: "Traits", entries: normalizeFeatureEntries(d.traits || c.traits) },
+        { title: "Actions", entries: normalizeFeatureEntries(d.actions || c.actions) },
+        { title: "Bonus Actions", entries: normalizeFeatureEntries(d.bonusActions || c.bonusActions) },
+        { title: "Reactions", entries: normalizeFeatureEntries(d.reactions || c.reactions) },
+        { title: "Legendary Actions", entries: normalizeFeatureEntries(d.legendaryActions || c.legendaryActions) }
+      ].filter((g) => g.entries.length);
+
+      const coreMeta = [
+        `AC ${Math.max(0, intOr(c.ac, 0))}`,
+        `HP ${Math.max(0, intOr(c.hpCurrent, 0))}/${Math.max(0, intOr(c.hpMax, 0))}`,
+        `Speed ${Math.max(0, intOr(c.speed, 0))} ft`,
+        `CR ${normalizeCR(c.cr, "0")}`,
+        c.xp > 0 ? `XP ${intOr(c.xp, 0).toLocaleString()}` : "",
+        d.proficiencyBonus != null ? `PB ${signedInt(d.proficiencyBonus)}` : ""
+      ]
+        .filter(Boolean)
+        .map((item) => `<span class="monster-stat-core-pill">${esc(item)}</span>`)
+        .join("");
+
+      const hasAnyData = !!coreMeta || !!abilityCells || miscRows.length || groups.length;
+
+      if (!hasAnyData) {
+        return `
+          <div class="monster-details monster-statblock">
+            <div class="monster-detail-group">
+              <div class="monster-detail-title">Full Stat Block</div>
+              <div class="monster-detail-entry">
+                <span class="monster-detail-text">No full stat block data is available on this monster record.</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="monster-details monster-statblock">
+          <div class="monster-detail-group">
+            <div class="monster-detail-title">Full Stat Block</div>
+            <div class="monster-stat-core">${coreMeta}</div>
+            ${abilityCells ? `<div class="monster-stat-ability-grid">${abilityCells}</div>` : ""}
+            ${
+              miscRows.length
+                ? `
+              <div class="monster-stat-list">
+                ${miscRows
+                  .map(
+                    ([k, v]) => `
+                  <div class="monster-stat-line">
+                    <span class="monster-stat-k">${esc(k)}</span>
+                    <span class="monster-stat-v">${esc(v)}</span>
+                  </div>
+                `
+                  )
+                  .join("")}
+              </div>
+            `
+                : ""
+            }
+          </div>
+
           ${groups
             .map(
               (group) => `
@@ -2125,13 +2418,13 @@
                       <button class="btn btn-xs" data-dmg="${esc(c.id)}">Damage</button>
                       <button class="btn btn-secondary btn-xs" data-heal="${esc(c.id)}">Heal</button>
                       <button class="btn btn-secondary btn-xs" data-open-conds="${esc(c.id)}">Conditions</button>
-                      ${hasMonsterDetails(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-details="${esc(c.id)}" data-toggle-scope="active">${c.showMonsterDetails ? "Hide" : "Info"}</button>` : ""}
+                      ${isMonsterCombatant(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-details="${esc(c.id)}" data-toggle-scope="active">${c.showMonsterDetails ? "Hide Details" : "Details"}</button>` : ""}
+                      ${isMonsterCombatant(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-statblock="${esc(c.id)}" data-toggle-scope="active">${c.showMonsterStatBlock ? "Hide Block" : "Stat Block"}</button>` : ""}
                     </div>
                   </div>
 
-                  ${renderConditionColumn(c)}
-
                   ${renderMonsterDetailsPanel(c)}
+                  ${renderMonsterStatBlockPanel(c)}
 
                   <div class="card-meta">
                     <div class="card-meta-top">
@@ -2271,7 +2564,8 @@ function renderLibraryTab() {
                         <span>/</span>
                         <input class="tiny-num" type="number" min="0" data-lib-card-field="hpMax" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.hpMax}">
                                             <div class="hp-buttons">
-                        ${hasMonsterDetails(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-details="${esc(c.id)}" data-toggle-scope="library" data-lib-enc-id="${esc(enc.id)}">${c.showMonsterDetails ? "Hide" : "Info"}</button>` : ""}
+                        ${isMonsterCombatant(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-details="${esc(c.id)}" data-toggle-scope="library" data-lib-enc-id="${esc(enc.id)}">${c.showMonsterDetails ? "Hide Details" : "Details"}</button>` : ""}
+                        ${isMonsterCombatant(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-statblock="${esc(c.id)}" data-toggle-scope="library" data-lib-enc-id="${esc(enc.id)}">${c.showMonsterStatBlock ? "Hide Block" : "Stat Block"}</button>` : ""}
                       </div>
                     </div>
                       <div class="card-meta">
@@ -2312,6 +2606,8 @@ function renderLibraryTab() {
                       </div>
 
                       ${renderMonsterDetailsPanel(c)}
+
+                      ${renderMonsterStatBlockPanel(c)}
                     </div>
                   </div>
                 </div>
@@ -2814,8 +3110,8 @@ function renderEditorModal() {
         .card-content {
           flex: 1;
           display: grid;
-          grid-template-columns: minmax(220px,1.45fr) minmax(300px,1.1fr) minmax(180px,0.95fr) minmax(136px,0.9fr);
-          grid-template-areas: "name hp cond meta";
+          grid-template-columns: minmax(220px,1.55fr) minmax(290px,1.1fr) minmax(136px,0.9fr);
+          grid-template-areas: "name hp meta";
           align-items: center;
           column-gap: 8px;
           row-gap: 3px;
@@ -2987,56 +3283,6 @@ function renderEditorModal() {
           white-space: nowrap;
         }
 
-        .condition-column {
-          grid-area: cond;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          justify-content: center;
-          gap: 4px;
-          min-width: 0;
-          justify-self: start;
-        }
-
-        .condition-title {
-          font-size: 0.62rem;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          line-height: 1;
-          white-space: nowrap;
-        }
-
-        .condition-chip-wrap {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 5px;
-          align-items: center;
-          max-width: 100%;
-          min-height: 20px;
-        }
-
-        .enc-cond-chip {
-          display: inline-flex;
-          align-items: center;
-          padding: 1px 8px;
-          border-radius: 999px;
-          border: 1px solid #35445a;
-          background: #0a1018;
-          color: #dbe8ff;
-          font-size: 0.72rem;
-          line-height: 1.55;
-          white-space: nowrap;
-        }
-
-        .enc-cond-none {
-          color: var(--text-muted);
-          font-size: 0.72rem;
-          line-height: 1.4;
-          opacity: 0.9;
-          white-space: nowrap;
-        }
-
         .card-meta {
           grid-area: meta;
           display: flex;
@@ -3197,6 +3443,97 @@ function renderEditorModal() {
 
         .monster-detail-text {
           color: #c7d0de;
+        }
+
+        .monster-details.monster-statblock {
+          margin-top: 8px;
+          gap: 8px;
+        }
+
+        .monster-stat-core {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+
+        .monster-stat-core-pill {
+          border: 1px solid #2f4258;
+          border-radius: 999px;
+          background: #0b1420;
+          color: #d6e1f3;
+          font-size: 0.68rem;
+          padding: 2px 8px;
+          line-height: 1.35;
+        }
+
+        .monster-stat-ability-grid {
+          display: grid;
+          grid-template-columns: repeat(6, minmax(50px, 1fr));
+          gap: 6px;
+          margin-bottom: 8px;
+        }
+
+        .monster-stat-ability-cell {
+          border: 1px solid #2a3648;
+          background: #09121d;
+          border-radius: 8px;
+          padding: 5px 4px;
+          text-align: center;
+          display: grid;
+          gap: 2px;
+        }
+
+        .monster-stat-ability-key {
+          font-size: 0.63rem;
+          letter-spacing: 0.06em;
+          color: #87a9d6;
+          font-weight: 700;
+        }
+
+        .monster-stat-ability-score {
+          font-size: 0.82rem;
+          font-weight: 700;
+          color: #f0f4fb;
+        }
+
+        .monster-stat-ability-mod {
+          font-size: 0.68rem;
+          color: #b8c6dd;
+        }
+
+        .monster-stat-list {
+          display: grid;
+          gap: 4px;
+          margin-top: 4px;
+        }
+
+        .monster-stat-line {
+          display: grid;
+          grid-template-columns: 156px minmax(0, 1fr);
+          gap: 6px;
+          font-size: 0.72rem;
+          line-height: 1.35;
+        }
+
+        .monster-stat-k {
+          color: #89a8cf;
+          font-weight: 600;
+        }
+
+        .monster-stat-v {
+          color: #d3ddec;
+        }
+
+        @media (max-width: 920px) {
+          .monster-stat-ability-grid {
+            grid-template-columns: repeat(3, minmax(56px, 1fr));
+          }
+
+          .monster-stat-line {
+            grid-template-columns: 1fr;
+            gap: 2px;
+          }
         }
 
         .encounter-list {
@@ -3674,7 +4011,6 @@ function renderEditorModal() {
             grid-template-areas:
               "name"
               "hp"
-              "cond"
               "meta";
             row-gap: 6px;
           }
@@ -3685,7 +4021,6 @@ function renderEditorModal() {
           .name-row { justify-content: flex-start; }
           .card-meta { justify-self: flex-start; align-items: flex-start; }
           .hp-block { justify-self: flex-start; }
-          .condition-column { justify-self: flex-start; }
           .monster-picker-filters { grid-template-columns: 1fr; }
         }
 
@@ -4265,25 +4600,58 @@ function renderEditorModal() {
       bindInlineEditEvents();
 
       shadow.querySelectorAll("[data-toggle-monster-details]").forEach((btn) => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
           const scope = btn.getAttribute("data-toggle-scope") || "active";
           const cardId = btn.getAttribute("data-toggle-monster-details");
           if (!cardId) return;
 
-          if (scope === "library") {
-            const encId = btn.getAttribute("data-lib-enc-id");
-            const enc = state.library.find((e) => e.id === encId);
-            const c = enc?.combatants?.find((x) => x.id === cardId);
-            if (!c) return;
-            c.showMonsterDetails = !c.showMonsterDetails;
-            persistAndRender();
-            return;
-          }
+          const findCard = () => {
+            if (scope === "library") {
+              const encId = btn.getAttribute("data-lib-enc-id");
+              const enc = state.library.find((e) => e.id === encId);
+              return enc?.combatants?.find((x) => x.id === cardId) || null;
+            }
+            return state.activeCombatants.find((x) => x.id === cardId) || null;
+          };
 
-          const c = state.activeCombatants.find((x) => x.id === cardId);
+          const c = findCard();
           if (!c) return;
           c.showMonsterDetails = !c.showMonsterDetails;
+          if (c.showMonsterDetails) c.showMonsterStatBlock = false;
           persistAndRender();
+
+          if (c.showMonsterDetails && isMonsterCombatant(c)) {
+            const changed = await ensureMonsterDataForCard(c);
+            if (changed) persistAndRender();
+          }
+        });
+      });
+
+      shadow.querySelectorAll("[data-toggle-monster-statblock]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const scope = btn.getAttribute("data-toggle-scope") || "active";
+          const cardId = btn.getAttribute("data-toggle-monster-statblock");
+          if (!cardId) return;
+
+          const findCard = () => {
+            if (scope === "library") {
+              const encId = btn.getAttribute("data-lib-enc-id");
+              const enc = state.library.find((e) => e.id === encId);
+              return enc?.combatants?.find((x) => x.id === cardId) || null;
+            }
+            return state.activeCombatants.find((x) => x.id === cardId) || null;
+          };
+
+          const c = findCard();
+          if (!c) return;
+          c.showMonsterStatBlock = !c.showMonsterStatBlock;
+          if (c.showMonsterStatBlock) c.showMonsterDetails = false;
+          persistAndRender();
+
+          if (c.showMonsterStatBlock && isMonsterCombatant(c)) {
+            const changed = await ensureMonsterDataForCard(c);
+            if (changed) persistAndRender();
+          }
         });
       });
 
