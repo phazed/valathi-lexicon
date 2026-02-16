@@ -214,6 +214,23 @@
   function crToXP(cr) {
     return CR_XP_BY_RATING[normalizeCR(cr, "0")] || 0;
   }
+  function crToFloat(cr) {
+  const s = String(cr ?? "").trim();
+  if (!s) return -1;
+
+  if (s.includes("/")) {
+    const parts = s.split("/");
+    if (parts.length !== 2) return -1;
+    const num = Number(parts[0]);
+    const den = Number(parts[1]);
+    if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return -1;
+    return num / den;
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : -1;
+}
+
 
   function canonicalConditionName(value) {
     const s = String(value || "").trim().toLowerCase();
