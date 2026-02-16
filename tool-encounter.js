@@ -49,6 +49,25 @@
     "Unconscious"
   ];
 
+  const CONDITION_INFO_2024 = {
+    Blinded: "Can’t see and fails sight checks. Attack rolls against it have advantage, and its attacks have disadvantage.",
+    Charmed: "Can’t attack the charmer or target it with harmful effects, and the charmer has advantage on social checks.",
+    Deafened: "Can’t hear and fails hearing checks.",
+    Exhaustion: "Each level applies −2 to D20 tests and −5 speed. At level 6, the creature dies.",
+    Frightened: "Has disadvantage on checks and attacks while it can see the source, and can’t willingly move closer.",
+    Grappled: "Speed is 0 while grappled.",
+    Incapacitated: "Can’t take actions, bonus actions, or reactions.",
+    Invisible: "Can’t be seen without special senses or magic. Its attacks have advantage; attacks against it have disadvantage.",
+    Paralyzed: "Incapacitated, speed 0, fails Str/Dex saves; attacks against it have advantage; nearby hits are critical.",
+    Petrified: "Incapacitated and transformed to an inanimate substance, with heavy defenses and immunities.",
+    Poisoned: "Has disadvantage on attack rolls and ability checks.",
+    Prone: "Can crawl unless it stands; nearby attackers gain advantage and distant attacks have disadvantage.",
+    Restrained: "Speed 0; attacks have disadvantage; attacks against it have advantage; Dex saves have disadvantage.",
+    Stunned: "Incapacitated, speed 0, fails Str/Dex saves; attacks against it have advantage.",
+    Unconscious: "Incapacitated and unaware; drops held items, falls prone, and nearby hits are critical."
+  };
+
+
   const CR_XP_BY_RATING = {
     "0": 0,
     "1/8": 25,
@@ -187,6 +206,45 @@
     return /^data:image\//i.test(s) ? s : "";
   }
 
+  function monsterVaultApi() {
+    const api = window.VrahuneMonsterVault;
+    if (!api || typeof api !== "object") return null;
+    if (typeof api.getAllMonsters !== "function" || typeof api.toEncounterCombatant !== "function") return null;
+    return api;
+  }
+
+  function hasMonsterVaultApi() {
+    return !!monsterVaultApi();
+  }
+
+  function monsterVaultMonsters() {
+    const api = monsterVaultApi();
+    if (!api) return [];
+    try {
+      return (api.getAllMonsters() || []).map((m) => ({
+        id: String(m.id || ""),
+        name: String(m.name || "Unnamed Monster"),
+        type: ["PC", "NPC", "Enemy"].includes(m.type) ? m.type : "Enemy",
+        cr: normalizeCR(m.cr, "1/8"),
+        ac: Math.max(0, intOr(m.ac, 10)),
+        hp: Math.max(1, intOr(m.hp, 1)),
+        speed: Math.max(0, intOr(m.speed, 30)),
+        initiative: Math.max(0, intOr(m.initiative, 10)),
+        source: m.isHomebrew ? "Homebrew" : "SRD 2024",
+        sourceType: m.isHomebrew ? "homebrew" : "srd",
+        sizeType: String(m.sizeType || "")
+      }));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function hasMonsterDetails(c) {
+    if (!c || c.type !== "Enemy") return false;
+    return [c.traits, c.actions, c.bonusActions, c.reactions, c.legendaryActions].some((arr) => Array.isArray(arr) && arr.length);
+  }
+
+
   function initialParties() {
     return [
       {
@@ -209,6 +267,23 @@
     const initiative = Math.max(0, intOr(raw.initiative, 10));
     const levelDefault = type === "Enemy" ? 1 : 3;
 
+    const details = raw.details && typeof raw.details === "object" ? JSON.parse(JSON.stringify(raw.details)) : null;
+    const normalizeFeatures = (list) =>
+      (Array.isArray(list) ? list : [])
+        .map((entry) => {
+          const name = String(entry?.name || "").trim();
+          const text = String(entry?.text || entry?.description || "").trim();
+          if (!name && !text) return null;
+          return { name: name || "Feature", text };
+        })
+        .filter(Boolean);
+
+    const traits = normalizeFeatures(raw.traits || details?.traits);
+    const actions = normalizeFeatures(raw.actions || details?.actions);
+    const bonusActions = normalizeFeatures(raw.bonusActions || details?.bonusActions);
+    const reactions = normalizeFeatures(raw.reactions || details?.reactions);
+    const legendaryActions = normalizeFeatures(raw.legendaryActions || details?.legendaryActions);
+
     return {
       id: raw.id || uid("c"),
       name: String(raw.name || "Unnamed").trim() || "Unnamed",
@@ -222,7 +297,19 @@
       cr: normalizeCR(raw.cr, type === "Enemy" ? "1" : "0"),
       conditions: normalizeConditions(raw.conditions),
       exhaustionLevel: clamp(intOr(raw.exhaustionLevel, 0), 0, 6),
-      portrait: normalizePortrait(raw.portrait)
+      portrait: normalizePortrait(raw.portrait),
+      sourceMonsterId: raw.sourceMonsterId ? String(raw.sourceMonsterId) : "",
+      sourceMonsterName: raw.sourceMonsterName ? String(raw.sourceMonsterName) : "",
+      source: raw.source ? String(raw.source) : "",
+      xp: Math.max(0, intOr(raw.xp, raw.cr ? crToXP(raw.cr) : 0)),
+      sizeType: raw.sizeType ? String(raw.sizeType) : "",
+      details,
+      traits,
+      actions,
+      bonusActions,
+      reactions,
+      legendaryActions,
+      showMonsterDetails: !!raw.showMonsterDetails
     };
   }
 
@@ -556,6 +643,63 @@
       cardId: null
     };
 
+    const monsterPicker = {
+      open: false,
+      scope: "active",
+      encounterId: null,
+      query: "",
+      cr: "all",
+      source: "all"
+    };
+
+    function openMonsterPicker(scope, encounterId = null) {
+      monsterPicker.open = true;
+      monsterPicker.scope = scope === "library" ? "library" : "active";
+      monsterPicker.encounterId = encounterId || null;
+      monsterPicker.query = "";
+      monsterPicker.cr = "all";
+      monsterPicker.source = "all";
+      render();
+    }
+
+    function closeMonsterPicker() {
+      monsterPicker.open = false;
+      monsterPicker.encounterId = null;
+      render();
+    }
+
+    function addMonsterFromVault(monsterId) {
+      const api = monsterVaultApi();
+      if (!api || !monsterId) return;
+      let created = null;
+      try {
+        created = api.toEncounterCombatant(monsterId);
+      } catch (_) {
+        created = null;
+      }
+      if (!created) return;
+
+      if (created.hp != null && created.hpMax == null) created.hpMax = created.hp;
+      if (created.hpMax != null && created.hpCurrent == null) created.hpCurrent = created.hpMax;
+      if (created.initiative == null) created.initiative = 10;
+
+      const next = mkCombatant(created);
+      if (monsterPicker.scope === "library") {
+        const enc = state.library.find((e) => e.id === monsterPicker.encounterId);
+        if (!enc) return;
+        enc.combatants.push(next);
+        enc.combatants = sortByInitiativeDesc(enc.combatants);
+      } else {
+        state.activeCombatants.push(next);
+        state.activeCombatants = sortByInitiativeDesc(state.activeCombatants);
+        if (state.turnIndex >= state.activeCombatants.length) {
+          state.turnIndex = Math.max(0, state.activeCombatants.length - 1);
+        }
+      }
+      persistAndRender();
+    }
+
+
     function getActiveCombatantById(cardId) {
       return state.activeCombatants.find((c) => c.id === cardId) || null;
     }
@@ -638,545 +782,48 @@
       const chips = [];
       (c.conditions || []).forEach((cond) => {
         const label = cond.duration ? `${cond.name} · ${cond.duration}r` : cond.name;
-        chips.push(`<span class="condition-chip">${esc(label)}</span>`);
+        const tip = CONDITION_INFO_2024[cond.name] || "";
+        chips.push(`<span class="condition-chip" title="${esc(tip)}">${esc(label)}</span>`);
       });
       if ((c.exhaustionLevel || 0) > 0) {
-        chips.push(`<span class="condition-chip exhaustion">Exhaustion ${c.exhaustionLevel}</span>`);
+        chips.push(`<span class="condition-chip exhaustion" title="${esc(CONDITION_INFO_2024.Exhaustion)}">Exhaustion ${c.exhaustionLevel}</span>`);
       }
       if (!chips.length) return "";
       return `<div class="condition-row">${chips.join("")}</div>`;
     }
 
-    function getEncounterDifficulty(combatants = state.activeCombatants) {
-      const roster = Array.isArray(combatants) ? combatants : [];
-      const allies = roster.filter((c) => c.type !== "Enemy");
-      const enemies = roster.filter((c) => c.type === "Enemy");
+    function renderMonsterDetailsPanel(c) {
+      if (!hasMonsterDetails(c) || !c.showMonsterDetails) return "";
+      const groups = [
+        { title: "Traits", entries: c.traits || [] },
+        { title: "Actions", entries: c.actions || [] },
+        { title: "Bonus Actions", entries: c.bonusActions || [] },
+        { title: "Reactions", entries: c.reactions || [] },
+        { title: "Legendary", entries: c.legendaryActions || [] }
+      ].filter((g) => Array.isArray(g.entries) && g.entries.length);
 
-      const partyLevels = allies.map((c) => normalizeLevel(c.level, 1));
-      const partyCount = partyLevels.length;
-      const enemyCount = enemies.length;
-      const enemyXP = enemies.reduce((sum, c) => sum + crToXP(c.cr), 0);
-
-      const budget = partyLevels.reduce(
-        (acc, lv) => {
-          const row = XP_BUDGET_2024_BY_LEVEL[lv] || XP_BUDGET_2024_BY_LEVEL[1];
-          acc.low += row.low;
-          acc.moderate += row.moderate;
-          acc.high += row.high;
-          return acc;
-        },
-        { low: 0, moderate: 0, high: 0 }
-      );
-
-      let tier = "Not enough data";
-      let tierClass = "tier-none";
-
-      if (!partyCount || !enemyCount) {
-        tier = !partyCount ? "Add PCs/NPCs with levels" : "Add enemies with CR";
-      } else if (enemyXP <= budget.low) {
-        tier = "Low";
-        tierClass = "tier-low";
-      } else if (enemyXP <= budget.moderate) {
-        tier = "Moderate";
-        tierClass = "tier-moderate";
-      } else if (enemyXP <= budget.high) {
-        tier = "High";
-        tierClass = "tier-high";
-      } else if (enemyXP <= budget.high * 1.5) {
-        tier = "Above High";
-        tierClass = "tier-above";
-      } else {
-        tier = "Extreme";
-        tierClass = "tier-extreme";
-      }
-
-      const pctOfHigh = budget.high > 0 ? Math.round((enemyXP / budget.high) * 100) : 0;
-      const lowPct = budget.high > 0 ? Math.round((budget.low / budget.high) * 100) : 0;
-      const moderatePct = budget.high > 0 ? Math.round((budget.moderate / budget.high) * 100) : 0;
-
-      return {
-        partyCount,
-        enemyCount,
-        enemyXP,
-        budget,
-        tier,
-        tierClass,
-        pctOfHigh: clamp(pctOfHigh, 0, 300),
-        lowPct: clamp(lowPct, 0, 100),
-        moderatePct: clamp(moderatePct, 0, 100)
-      };
-    }
-
-    function getSelectedParty() {
-      return state.parties.find((p) => p.id === state.selectedPartyId) || null;
-    }
-
-    function currentTurnName() {
-      if (!state.activeCombatants.length) return "—";
-      const idx = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
-      return state.activeCombatants[idx]?.name || "—";
-    }
-
-    function tagClass(type) {
-      if (type === "PC") return "pc-card";
-      if (type === "Enemy") return "enemy-card";
-      return "npc-card";
-    }
-
-    function initials(name) {
-      const s = String(name || "?").trim();
-      if (!s) return "?";
-      const parts = s.split(/\s+/).slice(0, 2);
-      return parts.map((p) => p.charAt(0).toUpperCase()).join("");
-    }
-
-    function portraitMarkup(c, scope, refId = null) {
-      const hasPortrait = !!c.portrait;
-      const style = hasPortrait ? ` style="background-image:url('${esc(c.portrait)}')"` : "";
-      const encAttr = scope === "library" && refId ? ` data-lib-enc-id="${esc(refId)}"` : "";
-      const partyAttr = scope === "party" && refId ? ` data-party-id="${esc(refId)}"` : "";
+      if (!groups.length) return "";
       return `
-        <button
-          type="button"
-          class="card-portrait ${hasPortrait ? "has-image" : ""}"
-          title="Edit portrait"
-          data-portrait-upload
-          data-scope="${esc(scope)}"
-          data-card-id="${esc(c.id)}"
-          ${encAttr}
-          ${partyAttr}
-          ${style}
-        >
-          ${hasPortrait ? "" : esc(initials(c.name))}
-          <span class="portrait-badge" aria-hidden="true">📷</span>
-        </button>
-      `;
-    }
-
-    function getTargetCombatant(target) {
-      if (!target || !target.scope || !target.cardId) return null;
-      if (target.scope === "active") {
-        return state.activeCombatants.find((c) => c.id === target.cardId) || null;
-      }
-      if (target.scope === "library") {
-        const enc = state.library.find((e) => e.id === target.encId);
-        if (!enc) return null;
-        return enc.combatants.find((c) => c.id === target.cardId) || null;
-      }
-      if (target.scope === "party") {
-        const party = state.parties.find((p) => p.id === target.partyId) || getSelectedParty();
-        if (!party) return null;
-        return party.members.find((m) => m.id === target.cardId) || null;
-      }
-      return null;
-    }
-
-    function readFileAsDataUrl(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(reader.error || new Error("Failed to read image"));
-        reader.readAsDataURL(file);
-      });
-    }
-
-    function resizeImageDataUrl(dataUrl, maxDimension = 256, quality = 0.84) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const srcW = img.naturalWidth || img.width || 1;
-            const srcH = img.naturalHeight || img.height || 1;
-            const ratio = Math.min(1, maxDimension / Math.max(srcW, srcH));
-            const width = Math.max(1, Math.round(srcW * ratio));
-            const height = Math.max(1, Math.round(srcH * ratio));
-
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-              resolve(dataUrl);
-              return;
-            }
-
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = "high";
-            ctx.drawImage(img, 0, 0, width, height);
-
-            let out = "";
-            try {
-              out = canvas.toDataURL("image/webp", quality);
-            } catch (_) {}
-            if (!out || out === "data:,") {
-              try {
-                out = canvas.toDataURL("image/jpeg", quality);
-              } catch (_) {}
-            }
-
-            resolve(out || dataUrl);
-          } catch (_) {
-            resolve(dataUrl);
-          }
-        };
-        img.onerror = () => resolve(dataUrl);
-        img.src = dataUrl;
-      });
-    }
-
-    async function processPortraitFile(file) {
-      if (!file) return "";
-      const raw = await readFileAsDataUrl(file);
-      if (!/^data:image\//i.test(raw)) return "";
-      const optimized = await resizeImageDataUrl(raw, 1024, 0.9);
-      return normalizePortrait(optimized || raw);
-    }
-
-    function portraitEditorMetrics() {
-      const img = portraitEditor.image;
-      const size = PORTRAIT_EDITOR_PREVIEW_SIZE;
-      if (!img) {
-        return {
-          size,
-          cx: size / 2,
-          cy: size / 2,
-          r: size * 0.485,
-          drawW: 0,
-          drawH: 0,
-          x: 0,
-          y: 0,
-          maxOffsetX: 0,
-          maxOffsetY: 0
-        };
-      }
-
-      const srcW = img.naturalWidth || img.width || 1;
-      const srcH = img.naturalHeight || img.height || 1;
-      const baseScale = Math.max(size / srcW, size / srcH);
-      const scale = baseScale * clamp(Number(portraitEditor.zoom) || 1, PORTRAIT_EDITOR_MIN_ZOOM, PORTRAIT_EDITOR_MAX_ZOOM);
-      const drawW = srcW * scale;
-      const drawH = srcH * scale;
-      const maxOffsetX = Math.max(0, (drawW - size) / 2);
-      const maxOffsetY = Math.max(0, (drawH - size) / 2);
-      const offsetX = clamp(portraitEditor.offsetX, -maxOffsetX, maxOffsetX);
-      const offsetY = clamp(portraitEditor.offsetY, -maxOffsetY, maxOffsetY);
-
-      return {
-        size,
-        cx: size / 2,
-        cy: size / 2,
-        r: size * 0.485,
-        drawW,
-        drawH,
-        x: size / 2 - drawW / 2 + offsetX,
-        y: size / 2 - drawH / 2 + offsetY,
-        maxOffsetX,
-        maxOffsetY
-      };
-    }
-
-    function clampPortraitEditorOffsets() {
-      const m = portraitEditorMetrics();
-      portraitEditor.offsetX = clamp(portraitEditor.offsetX, -m.maxOffsetX, m.maxOffsetX);
-      portraitEditor.offsetY = clamp(portraitEditor.offsetY, -m.maxOffsetY, m.maxOffsetY);
-    }
-
-    function drawPortraitEditorCanvas() {
-      const canvas = shadow.getElementById("portraitEditorCanvas");
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      const m = portraitEditorMetrics();
-      canvas.width = m.size;
-      canvas.height = m.size;
-
-      ctx.clearRect(0, 0, m.size, m.size);
-      ctx.fillStyle = "#080b11";
-      ctx.fillRect(0, 0, m.size, m.size);
-
-      if (portraitEditor.image) {
-        clampPortraitEditorOffsets();
-        const mm = portraitEditorMetrics();
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(portraitEditor.image, mm.x, mm.y, mm.drawW, mm.drawH);
-      } else {
-        ctx.fillStyle = "#8f98a8";
-        ctx.font = "600 13px system-ui, -apple-system, Segoe UI, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("No image selected", m.cx, m.cy);
-      }
-
-      ctx.save();
-      ctx.fillStyle = "rgba(4, 6, 10, 0.62)";
-      ctx.beginPath();
-      ctx.rect(0, 0, m.size, m.size);
-      ctx.moveTo(m.cx + m.r, m.cy);
-      ctx.arc(m.cx, m.cy, m.r, 0, Math.PI * 2, true);
-      ctx.fill("evenodd");
-      ctx.restore();
-
-      ctx.beginPath();
-      ctx.arc(m.cx, m.cy, m.r, 0, Math.PI * 2);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgba(236, 242, 255, 0.95)";
-      ctx.stroke();
-    }
-
-    function loadPortraitEditorImage(dataUrl, reset = true) {
-      const normalized = normalizePortrait(dataUrl);
-      portraitEditor.source = normalized;
-      portraitEditor.image = null;
-      portraitEditor.zoom = PORTRAIT_EDITOR_MIN_ZOOM;
-      if (reset) {
-        portraitEditor.offsetX = 0;
-        portraitEditor.offsetY = 0;
-      }
-
-      if (!normalized) {
-        drawPortraitEditorCanvas();
-        const saveBtn = shadow.getElementById("portraitEditorSaveBtn");
-        if (saveBtn) saveBtn.disabled = true;
-        return;
-      }
-
-      const img = new Image();
-      img.onload = () => {
-        portraitEditor.image = img;
-        clampPortraitEditorOffsets();
-        drawPortraitEditorCanvas();
-        const saveBtn = shadow.getElementById("portraitEditorSaveBtn");
-        if (saveBtn) saveBtn.disabled = false;
-      };
-      img.onerror = () => {
-        portraitEditor.image = null;
-        drawPortraitEditorCanvas();
-        const saveBtn = shadow.getElementById("portraitEditorSaveBtn");
-        if (saveBtn) saveBtn.disabled = true;
-      };
-      img.src = normalized;
-    }
-
-    function openPortraitEditor(target) {
-      const combatant = getTargetCombatant(target);
-      if (!combatant) return;
-      portraitEditor.open = true;
-      portraitEditor.target = {
-        scope: target.scope,
-        cardId: target.cardId,
-        encId: target.encId || null,
-        partyId: target.partyId || null
-      };
-      portraitEditor.dragging = false;
-      portraitEditor.pointerId = null;
-      loadPortraitEditorImage(combatant.portrait || "", true);
-      render();
-    }
-
-    function closePortraitEditor(shouldRender = true) {
-      portraitEditor.open = false;
-      portraitEditor.target = null;
-      portraitEditor.source = "";
-      portraitEditor.image = null;
-      portraitEditor.zoom = PORTRAIT_EDITOR_MIN_ZOOM;
-      portraitEditor.offsetX = 0;
-      portraitEditor.offsetY = 0;
-      portraitEditor.dragging = false;
-      portraitEditor.pointerId = null;
-      if (shouldRender) render();
-    }
-
-    function exportPortraitFromEditor() {
-      if (!portraitEditor.image) return "";
-
-      const out = document.createElement("canvas");
-      out.width = PORTRAIT_EDITOR_EXPORT_SIZE;
-      out.height = PORTRAIT_EDITOR_EXPORT_SIZE;
-      const ctx = out.getContext("2d");
-      if (!ctx) return "";
-
-      const m = portraitEditorMetrics();
-      const ratio = PORTRAIT_EDITOR_EXPORT_SIZE / m.size;
-
-      ctx.clearRect(0, 0, out.width, out.height);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(out.width / 2, out.height / 2, out.width / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(
-        portraitEditor.image,
-        m.x * ratio,
-        m.y * ratio,
-        m.drawW * ratio,
-        m.drawH * ratio
-      );
-      ctx.restore();
-
-      let data = "";
-      try {
-        data = out.toDataURL("image/webp", 0.92);
-      } catch (_) {
-        data = "";
-      }
-      if (!data || data === "data:,") {
-        try {
-          data = out.toDataURL("image/png");
-        } catch (_) {
-          data = "";
-        }
-      }
-      return normalizePortrait(data);
-    }
-
-    function savePortraitFromEditor() {
-      if (!portraitEditor.target) return;
-      const combatant = getTargetCombatant(portraitEditor.target);
-      if (!combatant) {
-        closePortraitEditor();
-        return;
-      }
-      const data = exportPortraitFromEditor();
-      if (!data) return;
-      combatant.portrait = data;
-      closePortraitEditor(false);
-      persistAndRender();
-    }
-
-    function removePortraitFromEditor() {
-      if (!portraitEditor.target) {
-        closePortraitEditor();
-        return;
-      }
-      const combatant = getTargetCombatant(portraitEditor.target);
-      if (!combatant) {
-        closePortraitEditor();
-        return;
-      }
-      combatant.portrait = "";
-      closePortraitEditor(false);
-      persistAndRender();
-    }
-
-    function moveItem(arr, fromId, toId) {
-      if (!Array.isArray(arr) || !fromId || !toId || fromId === toId) return arr;
-      const from = arr.findIndex((x) => x.id === fromId);
-      const to = arr.findIndex((x) => x.id === toId);
-      if (from < 0 || to < 0) return arr;
-      const copy = [...arr];
-      const [item] = copy.splice(from, 1);
-      copy.splice(to, 0, item);
-      return copy;
-    }
-
-    function moveToEnd(arr, fromId) {
-      const i = arr.findIndex((x) => x.id === fromId);
-      if (i < 0) return arr;
-      const copy = [...arr];
-      const [item] = copy.splice(i, 1);
-      copy.push(item);
-      return copy;
-    }
-
-    function sortByInitiativeDesc(arr) {
-      return [...arr].sort((a, b) => {
-        const diff = intOr(b.initiative, 0) - intOr(a.initiative, 0);
-        return diff;
-      });
-    }
-
-
-    function serializeActiveAsEncounter(existing = null) {
-      const baseName = state.activeEncounterName?.trim() || "Current Encounter";
-      return {
-        id: existing?.id || uid("enc"),
-        name: existing?.name || baseName,
-        tags: existing?.tags || "",
-        location: existing?.location || "",
-        combatants: state.activeCombatants.map((c) => cloneCombatant(c, true))
-      };
-    }
-
-    function ensureTurnIndex() {
-      if (!state.activeCombatants.length) {
-        state.turnIndex = 0;
-      } else {
-        state.turnIndex = clamp(state.turnIndex, 0, state.activeCombatants.length - 1);
-      }
-    }
-
-    function openEditor(encounter) {
-      const enc = encounter || { id: null, name: "", tags: "", location: "", combatants: [] };
-      state.editorOpen = true;
-      state.editorEncounterId = enc.id || null;
-      state.editor = {
-        name: enc.name || "",
-        tags: enc.tags || "",
-        location: enc.location || "",
-        combatants: (enc.combatants || []).map((c) => cloneCombatant(c, true)),
-        addDraft: { name: "", type: "Enemy", initiative: 10, ac: 13, speed: 30, hpCurrent: 10, hpMax: 10, level: 3, cr: "1" }
-      };
-      persistAndRender();
-    }
-
-    function closeEditor() {
-      state.editorOpen = false;
-      state.editorEncounterId = null;
-      persistAndRender();
-    }
-
-    function persistAndRender() {
-      saveState(state);
-      render();
-    }
-
-    function renderTopTabs() {
-      return `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-          <div class="tabs-row">
-            <button class="tab ${state.tab === "active" ? "active" : ""}" data-tab="active">Active Encounter</button>
-            <button class="tab ${state.tab === "library" ? "active" : ""}" data-tab="library">Encounter Library</button>
-          </div>
-          <div class="hint-text">Use this for combat, chases, stealth runs, or social scenes with turns.</div>
-        </div>
-      `;
-    }
-
-    function renderPortraitEditorModal() {
-      if (!portraitEditor.open) return "";
-      const targetCombatant = getTargetCombatant(portraitEditor.target);
-      const hasPortrait = !!targetCombatant?.portrait;
-      const hasDraftImage = !!portraitEditor.source;
-      const canRemove = hasPortrait || hasDraftImage;
-
-      return `
-        <div class="portrait-editor-backdrop" id="portraitEditorBackdrop">
-          <div class="portrait-editor-modal" role="dialog" aria-modal="true" aria-label="Portrait editor">
-            <div class="portrait-editor-head">
-              <div class="portrait-editor-title">Portrait Editor</div>
-              <div class="hint-text">Drag to reposition · Zoom to frame</div>
-            </div>
-
-            <div class="portrait-editor-canvas-wrap">
-              <canvas id="portraitEditorCanvas" width="${PORTRAIT_EDITOR_PREVIEW_SIZE}" height="${PORTRAIT_EDITOR_PREVIEW_SIZE}" aria-label="Portrait crop preview"></canvas>
-            </div>
-
-            <div class="portrait-editor-controls">
-              <label for="portraitEditorZoom">Zoom</label>
-              <input id="portraitEditorZoom" type="range" min="${PORTRAIT_EDITOR_MIN_ZOOM}" max="${PORTRAIT_EDITOR_MAX_ZOOM}" step="0.01" value="${Number(portraitEditor.zoom || 1).toFixed(2)}">
-            </div>
-
-            <div class="portrait-editor-actions">
-              <button type="button" class="btn btn-secondary btn-xs" id="portraitEditorCancelBtn">Cancel</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="portraitEditorUploadBtn">Choose image</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="portraitEditorRemoveBtn" ${canRemove ? "" : "disabled"}>Remove image</button>
-              <button type="button" class="btn btn-xs" id="portraitEditorSaveBtn" ${portraitEditor.image ? "" : "disabled"}>Save portrait</button>
-            </div>
-          </div>
+        <div class="monster-details">
+          ${groups
+            .map(
+              (group) => `
+                <div class="monster-detail-group">
+                  <div class="monster-detail-title">${esc(group.title)}</div>
+                  ${group.entries
+                    .map(
+                      (entry) => `
+                        <div class="monster-detail-entry">
+                          <span class="monster-detail-name">${esc(entry.name || "Feature")}</span>
+                          <span class="monster-detail-text">${esc(entry.text || "")}</span>
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+            )
+            .join("")}
         </div>
       `;
     }
@@ -1193,7 +840,7 @@
       const conditionButtons = CONDITIONS_2024.filter((name) => name !== "Exhaustion")
         .map((name) => {
           const active = combatant.conditions.some((c) => c.name === name);
-          return `<button type="button" class="condition-toggle ${active ? "active" : ""}" data-cond-toggle="${esc(name)}">${esc(name)}</button>`;
+          return `<button type="button" class="condition-toggle ${active ? "active" : ""}" data-cond-toggle="${esc(name)}" title="${esc(CONDITION_INFO_2024[name] || "")}">${esc(name)}</button>`;
         })
         .join("");
 
@@ -1244,6 +891,92 @@
             <div class="portrait-editor-actions">
               <button type="button" class="btn btn-secondary btn-xs" id="condClearAllBtn">Clear all</button>
               <button type="button" class="btn btn-secondary btn-xs" id="condCloseBtn">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMonsterVaultPickerModal() {
+      if (!monsterPicker.open) return "";
+
+      const allMonsters = monsterVaultMonsters();
+      const query = String(monsterPicker.query || "").trim().toLowerCase();
+      const crFilter = String(monsterPicker.cr || "all");
+      const sourceFilter = String(monsterPicker.source || "all");
+      const crValues = [...new Set(allMonsters.map((m) => m.cr).filter(Boolean))].sort((a, b) => crToFloat(a) - crToFloat(b));
+
+      const filtered = allMonsters.filter((m) => {
+        if (crFilter !== "all" && m.cr !== crFilter) return false;
+        if (sourceFilter !== "all" && m.sourceType !== sourceFilter) return false;
+        if (!query) return true;
+        const hay = `${m.name} ${m.cr} ${m.sizeType} ${m.source}`.toLowerCase();
+        return hay.includes(query);
+      });
+
+      const targetLabel =
+        monsterPicker.scope === "library"
+          ? (() => {
+              const enc = state.library.find((e) => e.id === monsterPicker.encounterId);
+              return enc ? `${enc.name} · ${enc.combatants.length} saved` : "Encounter Library";
+            })()
+          : `${state.activeEncounterName || "Active Encounter"} · ${state.activeCombatants.length} active`;
+
+      return `
+        <div class="monster-picker-backdrop" id="monsterPickerBackdrop">
+          <div class="monster-picker-modal" role="dialog" aria-modal="true" aria-label="Add from Monster Vault">
+            <div class="monster-picker-head">
+              <div class="portrait-editor-title">Add from Monster Vault</div>
+              <div class="hint-text">${esc(targetLabel)}</div>
+            </div>
+
+            <div class="monster-picker-filters">
+              <div class="col">
+                <label for="monsterPickerSearch">Search</label>
+                <input id="monsterPickerSearch" type="text" placeholder="Goblin, Dragon, CR 5..." value="${esc(monsterPicker.query)}">
+              </div>
+              <div class="col" style="max-width:120px;">
+                <label for="monsterPickerCr">CR</label>
+                <select id="monsterPickerCr">
+                  <option value="all" ${crFilter === "all" ? "selected" : ""}>All</option>
+                  ${crValues.map((cr) => `<option value="${esc(cr)}" ${crFilter === cr ? "selected" : ""}>${esc(cr)}</option>`).join("")}
+                </select>
+              </div>
+              <div class="col" style="max-width:140px;">
+                <label for="monsterPickerSource">Source</label>
+                <select id="monsterPickerSource">
+                  <option value="all" ${sourceFilter === "all" ? "selected" : ""}>All</option>
+                  <option value="srd" ${sourceFilter === "srd" ? "selected" : ""}>SRD 2024</option>
+                  <option value="homebrew" ${sourceFilter === "homebrew" ? "selected" : ""}>Homebrew</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="monster-picker-count">${filtered.length} result${filtered.length === 1 ? "" : "s"}${filtered.length > 300 ? " (showing first 300)" : ""}</div>
+
+            <div class="monster-picker-list">
+              ${
+                filtered.length
+                  ? filtered
+                      .slice(0, 300)
+                      .map(
+                        (m) => `
+                          <div class="monster-picker-row">
+                            <div class="monster-picker-main">
+                              <div class="monster-picker-name">${esc(m.name)}</div>
+                              <div class="monster-picker-meta">CR ${esc(m.cr)} · AC ${m.ac} · HP ${m.hp} · Spd ${m.speed} · Init ${m.initiative} · ${esc(m.source)}</div>
+                            </div>
+                            <button class="btn btn-xs" data-picker-add-monster="${esc(m.id)}">Add</button>
+                          </div>
+                        `
+                      )
+                      .join("")
+                  : `<div class="hint-text" style="padding:8px;">${hasMonsterVaultApi() ? "No monsters match your filters." : "Monster Vault tool is not loaded."}</div>`
+              }
+            </div>
+
+            <div class="portrait-editor-actions" style="justify-content:flex-end;">
+              <button type="button" class="btn btn-secondary btn-xs" id="monsterPickerCloseBtn">Done</button>
             </div>
           </div>
         </div>
@@ -1415,10 +1148,12 @@
                       <button class="btn btn-xs" data-dmg="${esc(c.id)}">Damage</button>
                       <button class="btn btn-secondary btn-xs" data-heal="${esc(c.id)}">Heal</button>
                       <button class="btn btn-secondary btn-xs" data-open-conds="${esc(c.id)}">Conditions</button>
+                      ${hasMonsterDetails(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-details="${esc(c.id)}" data-toggle-scope="active">${c.showMonsterDetails ? "Hide" : "Info"}</button>` : ""}
                     </div>
                   </div>
 
                   ${renderConditionBadges(c)}
+                  ${renderMonsterDetailsPanel(c)}
 
                   <div class="card-meta">
                     <div class="card-meta-top">
@@ -1494,7 +1229,10 @@
               <span class="chevron">${addExpanded ? "▾" : "▸"}</span>
               <span>Add / edit combatants</span>
             </button>
-            <span class="hint-text">Preload monsters or drop in ad-hoc PCs/NPCs.</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <span class="hint-text">Preload monsters or drop in ad-hoc PCs/NPCs.</span>
+              <button class="btn btn-secondary btn-xs" id="openVaultActiveBtn" ${hasMonsterVaultApi() ? "" : 'title="Load Monster Vault tool first"'}>Add from Monster Vault</button>
+            </div>
           </div>
           ${addSectionBody}
         </div>
@@ -1552,7 +1290,10 @@ function renderLibraryTab() {
                         <input class="tiny-num" type="number" min="0" data-lib-card-field="hpCurrent" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.hpCurrent}">
                         <span>/</span>
                         <input class="tiny-num" type="number" min="0" data-lib-card-field="hpMax" data-lib-card-id="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}" value="${c.hpMax}">
+                                            <div class="hp-buttons">
+                        ${hasMonsterDetails(c) ? `<button class="btn btn-secondary btn-xs" data-toggle-monster-details="${esc(c.id)}" data-toggle-scope="library" data-lib-enc-id="${esc(enc.id)}">${c.showMonsterDetails ? "Hide" : "Info"}</button>` : ""}
                       </div>
+                    </div>
                       <div class="card-meta">
                         <div class="card-meta-top">
                           <div class="meta-init-center">
@@ -1588,6 +1329,8 @@ function renderLibraryTab() {
                           <button class="btn-icon" title="Remove" data-lib-remove-card="${esc(c.id)}" data-lib-enc-id="${esc(enc.id)}">×</button>
                         </div>
                       </div>
+
+                      ${renderMonsterDetailsPanel(c)}
                     </div>
                   </div>
                 </div>
@@ -1656,7 +1399,10 @@ function renderLibraryTab() {
             <div class="boxed-subsection">
               <div class="boxed-subsection-header">
                 <div class="boxed-subsection-title">Add combatant</div>
-                <span class="hint-text">Auto-sorts by initiative. Use Lvl for PCs/NPCs, CR for enemies.</span>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <span class="hint-text">Auto-sorts by initiative. Use Lvl for PCs/NPCs, CR for enemies.</span>
+                  <button class="btn btn-secondary btn-xs" data-lib-open-vault="${esc(enc.id)}" ${hasMonsterVaultApi() ? "" : 'title="Load Monster Vault tool first"'}>Add from Monster Vault</button>
+                </div>
               </div>
               <div class="row">
                 <div class="col"><label>Name</label><input type="text" id="libAddName_${esc(enc.id)}" value="${esc(state.libraryAddDraft.name)}" placeholder="Goblin, Veteran, Mage"></div>
@@ -2323,6 +2069,52 @@ function renderEditorModal() {
           opacity: 0.95;
         }
 
+        .monster-details {
+          grid-column: 1 / -1;
+          margin-top: 6px;
+          border-top: 1px solid #27303d;
+          padding-top: 7px;
+          display: grid;
+          gap: 6px;
+        }
+
+        .monster-detail-group {
+          border: 1px solid #263242;
+          background: #0c121b;
+          border-radius: 8px;
+          padding: 6px 8px;
+        }
+
+        .monster-detail-title {
+          font-size: 0.68rem;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #9ec1ec;
+          margin-bottom: 4px;
+          font-weight: 700;
+        }
+
+        .monster-detail-entry {
+          font-size: 0.72rem;
+          color: #d8dee8;
+          line-height: 1.35;
+          margin-bottom: 4px;
+        }
+
+        .monster-detail-entry:last-child {
+          margin-bottom: 0;
+        }
+
+        .monster-detail-name {
+          font-weight: 700;
+          margin-right: 4px;
+          color: #f1f4f8;
+        }
+
+        .monster-detail-text {
+          color: #c7d0de;
+        }
+
         .encounter-list {
           border-radius: 8px;
           border: 1px solid #222832;
@@ -2506,6 +2298,93 @@ function renderEditorModal() {
           flex-wrap: wrap;
           justify-content: flex-end;
           gap: 6px;
+        }
+
+        .monster-picker-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.72);
+          display: grid;
+          place-items: center;
+          z-index: 1700;
+          padding: 14px;
+        }
+
+        .monster-picker-modal {
+          width: min(920px, calc(100vw - 20px));
+          max-height: min(780px, calc(100vh - 20px));
+          overflow: hidden;
+          display: grid;
+          grid-template-rows: auto auto auto minmax(160px, 1fr) auto;
+          gap: 8px;
+          background: #0a0f15;
+          border: 1px solid #2b3644;
+          border-radius: 14px;
+          box-shadow: 0 20px 46px rgba(0,0,0,0.5);
+          padding: 10px;
+        }
+
+        .monster-picker-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 2px;
+        }
+
+        .monster-picker-filters {
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          gap: 8px;
+          align-items: end;
+        }
+
+        .monster-picker-count {
+          font-size: 0.72rem;
+          color: #9aa6b5;
+        }
+
+        .monster-picker-list {
+          border: 1px solid #263141;
+          border-radius: 10px;
+          background: #070b10;
+          overflow: auto;
+          padding: 6px;
+          display: grid;
+          gap: 6px;
+        }
+
+        .monster-picker-row {
+          border: 1px solid #263344;
+          background: #0c1219;
+          border-radius: 8px;
+          padding: 7px 8px;
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .monster-picker-main {
+          min-width: 0;
+        }
+
+        .monster-picker-name {
+          font-size: 0.86rem;
+          font-weight: 700;
+          color: #e9edf4;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .monster-picker-meta {
+          font-size: 0.68rem;
+          color: #9fb0c4;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-top: 2px;
         }
 
         .condition-row {
@@ -2727,6 +2606,7 @@ function renderEditorModal() {
           .card-meta { justify-self: center; align-items: center; }
           .hp-block { justify-self: center; }
           .condition-row { justify-content: center; }
+          .monster-picker-filters { grid-template-columns: 1fr; }
         }
 
         .encounter-row.editing {
@@ -2755,6 +2635,7 @@ function renderEditorModal() {
       </div>
       ${renderPortraitEditorModal()}
       ${renderConditionEditorModal()}
+      ${renderMonsterVaultPickerModal()}
       `;
     }
 
@@ -3091,6 +2972,17 @@ function renderEditorModal() {
         });
       }
 
+      const openVaultActiveBtn = shadow.getElementById("openVaultActiveBtn");
+      if (openVaultActiveBtn) {
+        openVaultActiveBtn.addEventListener("click", () => {
+          if (!hasMonsterVaultApi()) {
+            window.alert("Open the Monster Vault tool first, then try again.");
+            return;
+          }
+          openMonsterPicker("active");
+        });
+      }
+
       // add combatant draft sync
       const addInputs = [
         ["addName", "name", (v) => v],
@@ -3292,6 +3184,29 @@ function renderEditorModal() {
 
       bindInlineEditEvents();
 
+      shadow.querySelectorAll("[data-toggle-monster-details]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const scope = btn.getAttribute("data-toggle-scope") || "active";
+          const cardId = btn.getAttribute("data-toggle-monster-details");
+          if (!cardId) return;
+
+          if (scope === "library") {
+            const encId = btn.getAttribute("data-lib-enc-id");
+            const enc = state.library.find((e) => e.id === encId);
+            const c = enc?.combatants?.find((x) => x.id === cardId);
+            if (!c) return;
+            c.showMonsterDetails = !c.showMonsterDetails;
+            persistAndRender();
+            return;
+          }
+
+          const c = state.activeCombatants.find((x) => x.id === cardId);
+          if (!c) return;
+          c.showMonsterDetails = !c.showMonsterDetails;
+          persistAndRender();
+        });
+      });
+
       shadow.querySelectorAll("[data-remove-card]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-remove-card");
@@ -3427,6 +3342,49 @@ function renderEditorModal() {
       }
 
 
+  const monsterPickerBackdrop = shadow.getElementById("monsterPickerBackdrop");
+  if (monsterPickerBackdrop) {
+    monsterPickerBackdrop.addEventListener("click", (e) => {
+      if (e.target === monsterPickerBackdrop) closeMonsterPicker();
+    });
+  }
+
+  const monsterPickerCloseBtn = shadow.getElementById("monsterPickerCloseBtn");
+  if (monsterPickerCloseBtn) {
+    monsterPickerCloseBtn.addEventListener("click", () => closeMonsterPicker());
+  }
+
+  const monsterPickerSearch = shadow.getElementById("monsterPickerSearch");
+  if (monsterPickerSearch) {
+    monsterPickerSearch.addEventListener("input", () => {
+      monsterPicker.query = monsterPickerSearch.value || "";
+      render();
+    });
+  }
+
+  const monsterPickerCr = shadow.getElementById("monsterPickerCr");
+  if (monsterPickerCr) {
+    monsterPickerCr.addEventListener("change", () => {
+      monsterPicker.cr = monsterPickerCr.value || "all";
+      render();
+    });
+  }
+
+  const monsterPickerSource = shadow.getElementById("monsterPickerSource");
+  if (monsterPickerSource) {
+    monsterPickerSource.addEventListener("change", () => {
+      monsterPicker.source = monsterPickerSource.value || "all";
+      render();
+    });
+  }
+
+  shadow.querySelectorAll("[data-picker-add-monster]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-picker-add-monster");
+      addMonsterFromVault(id);
+    });
+  });
+
   // library creation and actions
   const createName = shadow.getElementById("createName");
   const createLocation = shadow.getElementById("createLocation");
@@ -3450,7 +3408,6 @@ function renderEditorModal() {
       const location = String(state.createLocation || "").trim();
       const encounter = { id: uid("e"), name, location, combatants: [] };
       state.library.push(encounter);
-      state.activeLibraryId = encounter.id;
       state.libraryEditId = encounter.id;
       state.tab = "library";
       state.createName = "";
@@ -3488,6 +3445,10 @@ function renderEditorModal() {
       state.library = state.library.filter((e) => e.id !== id);
       if (state.activeLibraryId === id) state.activeLibraryId = null;
       if (state.libraryEditId === id) state.libraryEditId = null;
+      if (monsterPicker.scope === "library" && monsterPicker.encounterId === id) {
+        monsterPicker.open = false;
+        monsterPicker.encounterId = null;
+      }
       persistAndRender();
     });
   });
@@ -3588,6 +3549,18 @@ function renderEditorModal() {
         saveState(state);
       });
     }
+  });
+
+  shadow.querySelectorAll("[data-lib-open-vault]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const encId = btn.getAttribute("data-lib-open-vault");
+      if (!hasMonsterVaultApi()) {
+        window.alert("Open the Monster Vault tool first, then try again.");
+        return;
+      }
+      if (!encId || !state.library.some((e) => e.id === encId)) return;
+      openMonsterPicker("library", encId);
+    });
   });
 
   shadow.querySelectorAll("[data-lib-add-combatant]").forEach((btn) => {
