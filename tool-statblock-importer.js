@@ -1127,6 +1127,195 @@ q("sbi-copy")?.addEventListener("click", async () => {
     bind(labelEl, panelEl);
   }
 
+
+
+// -------------------------
+// v5.4 parser upgrades (researched phrase-bank + column-aware OCR + guards)
+// -------------------------
+function imageToCanvas(img) {
+  const c = document.createElement("canvas");
+  c.width = img.width; c.height = img.height;
+  c.getContext("2d").drawImage(img, 0, 0);
+  return c;
+}
+function cropCanvasRegion(srcCanvas, x, y, w, h) {
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w));
+  c.height = Math.max(1, Math.round(h));
+  const ctx = c.getContext("2d");
+  ctx.drawImage(srcCanvas, Math.round(x), Math.round(y), Math.round(w), Math.round(h), 0, 0, c.width, c.height);
+  return c;
+}
+function estimateTwoColumnSplitX(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const { width: w, height: h } = canvas;
+  const data = ctx.getImageData(0, 0, w, h).data;
+  const startX = Math.floor(w * 0.33), endX = Math.floor(w * 0.67);
+  let bestX = Math.floor(w/2), bestScore = Infinity;
+  for (let x=startX; x<=endX; x++) {
+    let ink = 0;
+    for (let y=0; y<h; y+=2) {
+      const i=(y*w+x)*4;
+      const lum = 0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+      ink += (255-lum);
+    }
+    if (ink < bestScore) { bestScore = ink; bestX = x; }
+  }
+  return bestX;
+}
+async function splitIntoColumnsDataUrls(dataUrl, opts={}) {
+  const { forceTwoColumn=true, gutterPx=20, minWidthForTwoCol=700 } = opts;
+  const img = await dataUrlToImage(dataUrl);
+  const base = imageToCanvas(img);
+  const w=base.width, h=base.height;
+  if (!forceTwoColumn && w < minWidthForTwoCol) return [{name:"single",dataUrl}];
+  const splitX = estimateTwoColumnSplitX(base);
+  const leftW = Math.max(1, splitX-gutterPx);
+  const rightX = Math.min(w-1, splitX+gutterPx);
+  const rightW = Math.max(1, w-rightX);
+  const left = cropCanvasRegion(base, 0, 0, leftW, h).toDataURL("image/png");
+  const right = cropCanvasRegion(base, rightX, 0, rightW, h).toDataURL("image/png");
+  return [{name:"left-col",dataUrl:left},{name:"right-col",dataUrl:right}];
+}
+async function runOcrOnDataUrl(dataUrl, onProgress, base=0, span=1, passName="") {
+  const rec = await window.Tesseract.recognize(dataUrl, "eng", {
+    logger: (m)=> {
+      if (m?.status === "recognizing text" && Number.isFinite(m.progress)) onProgress?.(base + m.progress*span, passName);
+    }
+  });
+  return normalizeSpaces(rec?.data?.text || "");
+}
+async function runMultiPassOCR(dataUrl, onProgress) {
+  await ensureTesseractLoaded();
+  const img = await dataUrlToImage(dataUrl);
+  const variants = [
+    { name: "raw", dataUrl },
+    { name: "upscale-gray-contrast", dataUrl: preprocessImageVariant(img, { scale: 1.8, grayscale: true, contrast: 1.35, threshold: null, denoise: true }) },
+    { name: "upscale-threshold", dataUrl: preprocessImageVariant(img, { scale: 2.0, grayscale: true, contrast: 1.45, threshold: 170, denoise: true, sharpen: true }) },
+  ];
+  const results = [];
+  for (let i=0;i<variants.length;i++) {
+    const v=variants[i];
+    const single = await runOcrOnDataUrl(v.dataUrl, onProgress, i/variants.length, 0.45/variants.length, `${v.name}-single`);
+    const cols = await splitIntoColumnsDataUrls(v.dataUrl, { forceTwoColumn:true, gutterPx:20, minWidthForTwoCol:700 });
+    let combined = single;
+    if (cols.length===2){
+      const left = await runOcrOnDataUrl(cols[0].dataUrl, onProgress, (i/variants.length)+(0.45/variants.length), 0.275/variants.length, `${v.name}-left`);
+      const right = await runOcrOnDataUrl(cols[1].dataUrl, onProgress, (i/variants.length)+(0.725/variants.length), 0.275/variants.length, `${v.name}-right`);
+      combined = normalizeSpaces(`${left}\n${right}`);
+    }
+    results.push({ name:`${v.name}-single`, text:single, score:scoreOcrText(single) });
+    results.push({ name:`${v.name}-columns`, text:combined, score:scoreOcrText(combined)+8 });
+  }
+  results.sort((a,b)=>b.score-a.score);
+  return { best: results[0], all: results };
+}
+
+const FIELD_BLOCK_PATTERNS = {
+  alignment:[/\bmelee weapon attack\b/i,/\branged weapon attack\b/i,/\battack roll\b/i,/\bhit:\b/i,/\bactions?\b/i,/\breactions?\b/i,/\blegendary actions?\b/i,/\bbonus actions?\b/i],
+  sizeType:[/\bmelee weapon attack\b/i,/\branged weapon attack\b/i,/\battack roll\b/i,/\bhit:\b/i,/\bactions?\b/i],
+  languages:[/\bmelee weapon attack\b/i,/\branged weapon attack\b/i,/\bhit:\b/i,/\bactions?\b/i],
+  senses:[/\bmelee weapon attack\b/i,/\branged weapon attack\b/i,/\bhit:\b/i,/\bactions?\b/i],
+};
+function containsBlockedPattern(v, field){ const s=String(v||"").trim(); return (FIELD_BLOCK_PATTERNS[field]||[]).some(re=>re.test(s));}
+function cleanScalar(v){ return String(v||"").replace(/\s{2,}/g," ").replace(/[|]/g,"").trim();}
+const ALIGNMENT_ALLOW_RE=/^(unaligned|any alignment|any non-good alignment|any non-lawful alignment|any non-evil alignment|lawful good|neutral good|chaotic good|lawful neutral|neutral|chaotic neutral|lawful evil|neutral evil|chaotic evil)(\s*\(.+\))?$/i;
+function sanitizeAlignment(value){
+  let v=cleanScalar(value);
+  if (!v || containsBlockedPattern(v,"alignment")) return "";
+  v=v.split(/\b(?:Actions?|Reactions?|Legendary Actions?|Bonus Actions?)\b/i)[0].trim();
+  if (ALIGNMENT_ALLOW_RE.test(v)) return v;
+  const known=["lawful good","neutral good","chaotic good","lawful neutral","neutral","chaotic neutral","lawful evil","neutral evil","chaotic evil","unaligned","any alignment","any non-good alignment","any non-lawful alignment","any non-evil alignment"];
+  const low=v.toLowerCase();
+  for (const k of known){ const idx=low.indexOf(k); if (idx>=0) return k.replace(/\b\w/g,c=>c.toUpperCase()); }
+  return "";
+}
+function sanitizeSizeType(value){
+  let v=cleanScalar(value);
+  if (!v || containsBlockedPattern(v,"sizeType")) return "";
+  const hasSize=/\b(Tiny|Small|Medium|Large|Huge|Gargantuan)\b/i.test(v);
+  if (!hasSize && v.length>45) return "";
+  return v;
+}
+function sanitizeListField(items, fieldName){
+  const arr=Array.isArray(items)?items:String(items||"").split(/[,;]+/);
+  return [...new Set(arr.map(x=>cleanScalar(x)).filter(x=>x && !containsBlockedPattern(x, fieldName) && !/^(actions?|reactions?|legendary actions?|bonus actions?)$/i.test(x)))];
+}
+function parseCompactImmunitiesLine(line){
+  const out={ dmg:[], cond:[] };
+  if (!line) return out;
+  const raw=line.replace(/^Immunities\b[:\s]*/i,"").trim();
+  if (!raw) return out;
+  const parts=raw.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
+  const condSet=new Set(["blinded","charmed","deafened","exhaustion","frightened","grappled","incapacitated","invisible","paralyzed","petrified","poisoned","prone","restrained","stunned","unconscious"]);
+  for (const p of parts){ if (condSet.has(p.toLowerCase())) out.cond.push(p); else out.dmg.push(p); }
+  return out;
+}
+function splitPreIntoCoreMetaTraits(pre) {
+  const core=[], meta=[], traitCandidates=[];
+  const coreLabels=[/^Armor Class\b/i,/^AC\b/i,/^Hit Points?\b/i,/^HP\b/i,/^Speed\b/i,/^Initiative\b/i,/^STR\b/i,/^DEX\b/i,/^CON\b/i,/^INT\b/i,/^WIS\b/i,/^CHA\b/i,/^Challenge\b/i,/^CR\b/i,/^Proficiency Bonus\b/i,/^PB\b/i];
+  const metaLabels=[/^Saving Throws?\b/i,/^Saves\b/i,/^Skills?\b/i,/^Damage Vulnerabilities?\b/i,/^Vulnerabilities\b/i,/^Damage Resistances?\b/i,/^Resistances\b/i,/^Damage Immunities?\b/i,/^Immunities\b/i,/^Condition Immunities?\b/i,/^Senses\b/i,/^Languages\b/i,/^Habitat\b/i,/^Environment\b/i];
+  const ignore=[/^MOD\b/i,/^SAVE\b/i,/^MOD\s+SAVE\b/i,/^SAVE\s+MOD\b/i];
+  const any=(line, arr)=>arr.some(re=>re.test(line));
+  for (let i=2;i<pre.length;i++){
+    const line=(pre[i]||"").trim(); if(!line) continue;
+    if (any(line, ignore)) continue;
+    if (any(line, coreLabels) || /\b(?:AC|HP|Speed|Initiative|CR|PB)\b/i.test(line)) { core.push(line); continue; }
+    if (any(line, metaLabels) || /understands|can't speak|telepathy|darkvision|blindsight|tremorsense|truesight/i.test(line)) { meta.push(line); continue; }
+    traitCandidates.push(line);
+  }
+  return { core, meta, traitCandidates };
+}
+function parseAC(coreLines, allText){
+  const src = repairNumericOCR(`${(coreLines||[]).join(" ")}\n${allText||""}`);
+  const patterns=[
+    /\b(?:AC|Armor\s*Class)\b\s*[:\-]?\s*(\d{1,2})(?:\s*\(([^)]+)\))?/i,
+    /\bAC\b\s*(\d{1,2})\b(?=[^\n]*(?:Initiative|HP|Speed|$))/i,
+  ];
+  for (const re of patterns){
+    const m=re.exec(src);
+    if (m){ const n=toInt(m[1],10); if(n>=1&&n<=30) return { value:n, notes:(m[2]||"").trim(), confidence:"high"}; }
+  }
+  return { value:10, notes:"", confidence:"low" };
+}
+
+const __oldParseStatBlock = parseStatBlock;
+parseStatBlock = function(rawInput){
+  let result = __oldParseStatBlock(rawInput);
+  try{
+    const cleaned = normalizeOcr(rawInput||"");
+    const lines = splitLines(cleaned);
+    const sliced = sliceByHeaders(lines);
+    const preSplit = splitPreIntoCoreMetaTraits(sliced.pre);
+
+    // robust core refresh
+    const acP = parseAC(preSplit.core, cleaned);
+    if (acP?.confidence !== "low") { result.ac = acP.value; result.acText = acP.notes || result.acText; result.confidence = {...(result.confidence||{}), ac: acP.confidence}; }
+
+    // compact immunities
+    const immLine = preSplit.meta.find(l=>/^Immunities\b/i.test(l));
+    if (immLine){
+      const x = parseCompactImmunitiesLine(immLine);
+      result.immunities = uniq([...(result.immunities||[]), ...x.dmg]);
+      result.conditionImmunities = uniq([...(result.conditionImmunities||[]), ...x.cond]);
+    }
+
+    // language continuation rescue
+    if ((!result.languages || !result.languages.length)){
+      const m = preSplit.meta.find(l=>/understands|can't speak|telepathy|common|undercommon|draconic/i.test(l));
+      if (m) result.languages = [m.replace(/^Languages?\b[:\s]*/i,"").trim()];
+    }
+
+    // Guards
+    result.sizeType = sanitizeSizeType(result.sizeType);
+    result.alignment = sanitizeAlignment(result.alignment);
+    result.languages = sanitizeListField(result.languages||[], "languages");
+    result.senses = sanitizeListField(result.senses||[], "senses");
+  } catch(e){}
+  return result;
+};
+
+
   window.registerTool({
     id: TOOL_ID,
     name: TOOL_NAME,
