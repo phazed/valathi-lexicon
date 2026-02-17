@@ -216,6 +216,89 @@
     return canvasToDataUrl(canvas);
   }
 
+  
+  function cropCanvasRegion(srcCanvas, x, y, w, h) {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(w));
+    c.height = Math.max(1, Math.round(h));
+    const ctx = c.getContext("2d");
+    ctx.drawImage(
+      srcCanvas,
+      Math.round(x), Math.round(y), Math.round(w), Math.round(h),
+      0, 0, c.width, c.height
+    );
+    return c;
+  }
+
+  function imageToCanvas(img) {
+    const c = document.createElement("canvas");
+    c.width = img.width;
+    c.height = img.height;
+    c.getContext("2d").drawImage(img, 0, 0);
+    return c;
+  }
+
+  function estimateTwoColumnSplitX(canvas) {
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const { width: w, height: h } = canvas;
+    const data = ctx.getImageData(0, 0, w, h).data;
+
+    const startX = Math.floor(w * 0.35);
+    const endX = Math.floor(w * 0.65);
+
+    let bestX = Math.floor(w / 2);
+    let bestScore = Infinity;
+
+    for (let x = startX; x <= endX; x++) {
+      let ink = 0;
+      for (let y = 0; y < h; y += 2) {
+        const i = (y * w + x) * 4;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        ink += (255 - lum);
+      }
+      if (ink < bestScore) {
+        bestScore = ink;
+        bestX = x;
+      }
+    }
+    return bestX;
+  }
+
+  async function splitIntoColumnsDataUrls(dataUrl, opts = {}) {
+    const { forceTwoColumn = false, gutterPx = 24, minWidthForTwoCol = 900 } = opts;
+    const img = await dataUrlToImage(dataUrl);
+    const base = imageToCanvas(img);
+    const w = base.width;
+    const h = base.height;
+
+    if (!forceTwoColumn && w < minWidthForTwoCol) return [{ name: "single", dataUrl }];
+
+    const splitX = estimateTwoColumnSplitX(base);
+    const leftW = Math.max(1, splitX - gutterPx);
+    const rightX = Math.min(w - 1, splitX + gutterPx);
+    const rightW = Math.max(1, w - rightX);
+
+    const left = cropCanvasRegion(base, 0, 0, leftW, h);
+    const right = cropCanvasRegion(base, rightX, 0, rightW, h);
+
+    return [
+      { name: "left-col", dataUrl: left.toDataURL("image/png") },
+      { name: "right-col", dataUrl: right.toDataURL("image/png") },
+    ];
+  }
+
+  async function runOcrOnDataUrl(dataUrl, onProgress, progressBase = 0, progressSpan = 1) {
+    const rec = await window.Tesseract.recognize(dataUrl, "eng", {
+      logger: (m) => {
+        if (m?.status === "recognizing text" && Number.isFinite(m.progress)) {
+          onProgress?.(progressBase + m.progress * progressSpan);
+        }
+      },
+    });
+    return normalizeSpaces(rec?.data?.text || "");
+  }
+
   function scoreOcrText(text) {
     const t = (text || "").toLowerCase();
     const labels = [
@@ -241,23 +324,31 @@
     const img = await dataUrlToImage(dataUrl);
     const variants = [
       { name: "raw", dataUrl },
-      { name: "upscale-gray-contrast", dataUrl: preprocessImageVariant(img, { scale: 1.8, grayscale: true, contrast: 1.35, threshold: null, denoise: true }) },
+      { name: "upscale-gray-contrast", dataUrl: preprocessImageVariant(img, { scale: 1.8, grayscale: true, contrast: 1.35, denoise: true }) },
       { name: "upscale-threshold", dataUrl: preprocessImageVariant(img, { scale: 2.0, grayscale: true, contrast: 1.45, threshold: 170, denoise: true, sharpen: true }) },
     ];
 
     const results = [];
     for (let i = 0; i < variants.length; i++) {
       const v = variants[i];
-      const rec = await window.Tesseract.recognize(v.dataUrl, "eng", {
-        logger: (m) => {
-          if (m?.status === "recognizing text" && Number.isFinite(m.progress)) {
-            const total = (i + m.progress) / variants.length;
-            onProgress?.(total, v.name);
-          }
-        },
-      });
-      const text = normalizeSpaces(rec?.data?.text || "");
-      results.push({ name: v.name, text, score: scoreOcrText(text) });
+
+      const singleText = await runOcrOnDataUrl(v.dataUrl, onProgress, (i / variants.length), (0.45 / variants.length));
+
+      const cols = await splitIntoColumnsDataUrls(v.dataUrl, { forceTwoColumn: true, gutterPx: 20, minWidthForTwoCol: 700 });
+
+      let colText = singleText;
+      if (cols.length === 2) {
+        const leftText = await runOcrOnDataUrl(cols[0].dataUrl, onProgress, (i / variants.length) + (0.45 / variants.length), (0.275 / variants.length));
+        const rightText = await runOcrOnDataUrl(cols[1].dataUrl, onProgress, (i / variants.length) + (0.725 / variants.length), (0.275 / variants.length));
+        colText = normalizeSpaces(`${leftText}
+${rightText}`);
+      }
+
+      const singleScore = scoreOcrText(singleText);
+      const colScore = scoreOcrText(colText);
+
+      results.push({ name: `${v.name}-single`, text: singleText, score: singleScore });
+      results.push({ name: `${v.name}-columns`, text: colText, score: colScore });
     }
 
     results.sort((a, b) => b.score - a.score);
@@ -423,7 +514,7 @@
 
     if (m) {
       const hp = toInt(m[1], 1);
-      return {
+      let result = {
         value: clamp(hp, 1, 9999),
         formula: (m[2] || "").trim(),
         confidence: hp > 0 ? "high" : "low",
@@ -549,6 +640,83 @@
     };
   }
 
+
+  // -------------------------
+  // Field contamination guards
+  // -------------------------
+  const FIELD_BLOCK_PATTERNS = {
+    alignment: [/\bmelee weapon attack\b/i, /\branged weapon attack\b/i, /\battack roll\b/i, /\bhit:\b/i, /\bactions?\b/i, /\breactions?\b/i, /\blegendary actions?\b/i, /\bbonus actions?\b/i, /\barmor class\b/i, /\bhit points?\b/i, /\bspeed\b/i],
+    sizeType: [/\bmelee weapon attack\b/i, /\branged weapon attack\b/i, /\battack roll\b/i, /\bhit:\b/i, /\bactions?\b/i, /\breactions?\b/i, /\blegendary actions?\b/i, /\bbonus actions?\b/i],
+    languages: [/\bmelee weapon attack\b/i, /\branged weapon attack\b/i, /\bhit:\b/i, /\bactions?\b/i, /\blegendary actions?\b/i],
+    senses: [/\bmelee weapon attack\b/i, /\branged weapon attack\b/i, /\bhit:\b/i, /\bactions?\b/i],
+  };
+
+  const ALIGNMENT_ALLOW_RE = /^(unaligned|any alignment|any non-good alignment|any non-lawful alignment|any non-evil alignment|lawful good|neutral good|chaotic good|lawful neutral|neutral|chaotic neutral|lawful evil|neutral evil|chaotic evil)(\s*\(.+\))?$/i;
+  const SIZE_WORDS = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
+
+  function containsBlockedPattern(value, fieldName) {
+    const s = String(value || "").trim();
+    if (!s) return false;
+    const patterns = FIELD_BLOCK_PATTERNS[fieldName] || [];
+    return patterns.some((re) => re.test(s));
+  }
+
+  function cleanScalar(value) {
+    return String(value || "").replace(/\s{2,}/g, " ").replace(/[|]/g, "").trim();
+  }
+
+  function sanitizeAlignment(value) {
+    let v = cleanScalar(value);
+    if (containsBlockedPattern(v, "alignment")) return "";
+    v = v.split(/\b(?:Actions?|Reactions?|Legendary Actions?|Bonus Actions?)\b/i)[0].trim();
+    if (ALIGNMENT_ALLOW_RE.test(v)) return v;
+    const known = ["lawful good","neutral good","chaotic good","lawful neutral","neutral","chaotic neutral","lawful evil","neutral evil","chaotic evil","unaligned","any alignment","any non-good alignment","any non-lawful alignment","any non-evil alignment"];
+    const low = v.toLowerCase();
+    for (const k of known) {
+      const idx = low.indexOf(k);
+      if (idx >= 0) return v.slice(idx, idx + k.length);
+    }
+    return "";
+  }
+
+  function sanitizeSizeType(value) {
+    let v = cleanScalar(value);
+    if (containsBlockedPattern(v, "sizeType")) return "";
+    v = v.split(/\b(?:Actions?|Reactions?|Legendary Actions?|Bonus Actions?)\b/i)[0].trim();
+    const hasSize = SIZE_WORDS.some((s) => new RegExp(`\\b${s}\\b`, "i").test(v));
+    if (!hasSize && v.length > 40) return "";
+    return v;
+  }
+
+  function sanitizeListField(items, fieldName) {
+    const arr = Array.isArray(items) ? items : String(items || "").split(/[,;]+/);
+    const out = [];
+    for (let item of arr) {
+      item = cleanScalar(item);
+      if (!item) continue;
+      if (containsBlockedPattern(item, fieldName)) continue;
+      if (/^(actions?|reactions?|legendary actions?|bonus actions?)$/i.test(item)) continue;
+      out.push(item);
+    }
+    return [...new Set(out)];
+  }
+
+  function applyFieldGuards(mon) {
+    if (!mon || typeof mon !== "object") return mon;
+    mon.sizeType = sanitizeSizeType(mon.sizeType);
+    mon.alignment = sanitizeAlignment(mon.alignment);
+    mon.languages = sanitizeListField(mon.languages || [], "languages");
+    mon.senses = sanitizeListField(mon.senses || [], "senses");
+
+    const scalarNoAttack = ["acText", "speed", "cr"];
+    for (const k of scalarNoAttack) {
+      const v = cleanScalar(mon[k]);
+      if (/\b(melee weapon attack|ranged weapon attack|attack roll|hit:)\b/i.test(v)) mon[k] = "";
+      else mon[k] = v;
+    }
+    return mon;
+  }
+
   // -------------------------
   // Main parser
   // -------------------------
@@ -672,6 +840,9 @@
 
       cleanedOcrText: cleaned,
     };
+
+    result = applyFieldGuards(result);
+    return result;
   }
 
   // -------------------------
@@ -746,7 +917,7 @@
       unmappedText: (q("sbi-unmapped")?.value || "").trim(),
     };
 
-    return reviewed;
+    return applyFieldGuards(reviewed);
   }
 
   // -------------------------
