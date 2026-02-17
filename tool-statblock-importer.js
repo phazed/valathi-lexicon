@@ -1577,60 +1577,61 @@ function parseACRobust(coreLines = [], allText = "") {
 
   const norm = String(raw || "")
     .replace(/[|]/g, " ")
-    .replace(/A\s*C/gi, "AC")
-    .replace(/Armor\s*Class/gi, "Armor Class")
-    .replace(/Armor\s*C1ass/gi, "Armor Class")
-    .replace(/ArmorClass/gi, "Armor Class")
-    .replace(/([Il])(\d)/g, "1$2")      // I5/l5 -> 15
-    .replace(/(\d)[Oo]/g, "$10")       // 1O -> 10
+    .replace(/\bA\s*C\b/gi, "AC")
+    .replace(/\bArmor\s*Class\b/gi, "Armor Class")
+    .replace(/\bArmor\s*C1ass\b/gi, "Armor Class")
+    .replace(/\bArmorClass\b/gi, "Armor Class")
+    .replace(/\b([Il])(\d)\b/g, "1$2")
+    .replace(/\b(\d)[Oo]\b/g, "$10")
     .replace(/\s+/g, " ")
     .trim();
 
-  const lines = norm.split(/(?<=[.!?])\s+|
-/).map(s => s.trim()).filter(Boolean);
+  const lines = norm
+    .split(/(?<=[.!?])\s+|\n/)
+    .map(s => s.trim())
+    .filter(Boolean);
 
   const isContaminated = (s) =>
-    /(melee weapon attack|ranged weapon attack|attack roll|hit:|actions?|reactions?|legendary actions?)/i.test(s || "");
+    /\b(melee weapon attack|ranged weapon attack|attack roll|hit:|actions?|reactions?|legendary actions?)\b/i.test(s || "");
 
   const candidates = [];
-  const push = (value, score, line, notes="") => {
+  const push = (value, score, line, notes = "") => {
     const n = Number(value);
     if (!Number.isFinite(n) || n < 1 || n > 30) return;
     candidates.push({ value: n, score, line, notes });
   };
 
-  // Pass 1: strongest anchors (supports AC17 / AC:17 / Armor Class17)
   for (const line of lines) {
     if (!line || isContaminated(line)) continue;
 
-    let m = /(?:^|\s)(?:AC|Armor\s*Class)\s*[:\-]?\s*(\d{1,2})(?=|\s|$)/i.exec(line);
+    let m = /(?:^|\s)(?:AC|Armor\s*Class)\s*[:\-]?\s*(\d{1,2})(?=\b|\s|$)/i.exec(line);
     if (m) {
-      const hasCoreNeighbors = /(initiative|hp|hit points|speed|cr|pb)/i.test(line);
+      const hasCoreNeighbors = /\b(initiative|hp|hit points|speed|cr|pb)\b/i.test(line);
       push(m[1], hasCoreNeighbors ? 100 : 95, line);
       continue;
     }
 
-    m = /(?:^|\s)AC(\d{1,2})(?=|\s|$)/i.exec(line); // AC17
+    m = /(?:^|\s)AC(\d{1,2})(?=\b|\s|$)/i.exec(line);
     if (m) {
-      const hasCoreNeighbors = /(initiative|hp|hit points|speed|cr|pb)/i.test(line);
-      push(m[1], hasCoreNeighbors ? 99 : 93, line);
+      const hasCoreNeighbors = /\b(initiative|hp|hit points|speed|cr|pb)\b/i.test(line);
+      push(m[1], hasCoreNeighbors ? 98 : 90, line);
       continue;
     }
 
-    m = /(?:^|\s)Armor\s*Class(\d{1,2})(?=|\s|$)/i.exec(line); // ArmorClass17-ish
+    m = /(?:^|\s)Armor\s*Class(\d{1,2})(?=\b|\s|$)/i.exec(line);
     if (m) {
-      push(m[1], 92, line);
+      const hasCoreNeighbors = /\b(initiative|hp|hit points|speed|cr|pb)\b/i.test(line);
+      push(m[1], hasCoreNeighbors ? 98 : 88, line);
       continue;
     }
   }
 
-  // Pass 2: top-window anchored fallback
   if (!candidates.length) {
-    const top = lines.slice(0, 20).join(" ");
-    let m = /(?:^|\s)(?:AC|Armor\s*Class)\s*[:\-]?\s*(\d{1,2})(?=|\s|$)/i.exec(top);
-    if (!m) m = /(?:^|\s)AC(\d{1,2})(?=|\s|$)/i.exec(top);
-    if (!m) m = /(?:^|\s)Armor\s*Class(\d{1,2})(?=|\s|$)/i.exec(top);
-    if (m) push(m[1], 80, top);
+    const top = norm.slice(0, 280);
+    let m = /\b(?:AC|Armor\s*Class)\s*[:\-]?\s*(\d{1,2})\b/i.exec(top);
+    if (!m) m = /\bAC(\d{1,2})\b/i.exec(top);
+    if (!m) m = /\bArmor\s*Class(\d{1,2})\b/i.exec(top);
+    if (m) push(m[1], 75, top);
   }
 
   if (candidates.length) {
@@ -1640,12 +1641,11 @@ function parseACRobust(coreLines = [], allText = "") {
       value: best.value,
       notes: best.notes || "",
       confidence: best.score >= 95 ? "high" : best.score >= 80 ? "medium" : "low",
-      acSourceLine: best.line || "",
-      _source: "anchored"
+      sourceLine: best.line || ""
     };
   }
 
-  return { value: 10, notes: "", confidence: "low", acSourceLine: "", _source: "default" };
+  return { value: 10, notes: "", confidence: "low", sourceLine: "" };
 }
 
 // keep parseAC name used elsewhere
