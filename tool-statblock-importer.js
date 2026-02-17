@@ -406,38 +406,46 @@
   }
 
   function parseHP(coreLines, allText) {
-    let line = bestLine(coreLines, /\bHit Points?\b|\bHP\b/i);
-    line = repairNumericOCR(line);
+    const coreJoin = repairNumericOCR((coreLines || []).join(" "));
+    const full = repairNumericOCR(String(allText || ""));
 
+    // Handles: HP 150, HP150, HP:150, Hit Points 150, HitPoints150
     let m =
-      /\bHit Points?\b\s*[:\-]?\s*(\d{1,4})\s*\(([^)]+)\)/i.exec(line) ||
-      /\bHit Points?\b\s*[:\-]?\s*(\d{1,4})\b/i.exec(line) ||
-      /\bHP\b\s*[:\-]?\s*(\d{1,4})\s*\(([^)]+)\)/i.exec(line) ||
-      /\bHP\b\s*[:\-]?\s*(\d{1,4})\b/i.exec(line);
+      /\b(?:Hit\s*Points?|HitPoints|HP)\s*[:\-]?\s*(\d{1,4})\s*\(([^)]+)\)/i.exec(coreJoin) ||
+      /\b(?:Hit\s*Points?|HitPoints|HP)(\d{1,4})\b\s*\(([^)]+)\)/i.exec(coreJoin) ||
+      /\b(?:Hit\s*Points?|HitPoints|HP)\s*[:\-]?\s*(\d{1,4})\b/i.exec(coreJoin) ||
+      /\b(?:Hit\s*Points?|HitPoints|HP)(\d{1,4})\b/i.exec(coreJoin);
 
     if (!m) {
       m =
-        /\bHit Points?\b[^0-9]{0,16}(\d{1,4})(?:\s*\(([^)]+)\))?/i.exec(allText) ||
-        /\bHP\b[^0-9]{0,8}(\d{1,4})(?:\s*\(([^)]+)\))?/i.exec(allText);
+        /\b(?:Hit\s*Points?|HitPoints|HP)\s*[:\-]?\s*(\d{1,4})\s*\(([^)]+)\)/i.exec(full) ||
+        /\b(?:Hit\s*Points?|HitPoints|HP)(\d{1,4})\b\s*\(([^)]+)\)/i.exec(full) ||
+        /\b(?:Hit\s*Points?|HitPoints|HP)\s*[:\-]?\s*(\d{1,4})\b/i.exec(full) ||
+        /\b(?:Hit\s*Points?|HitPoints|HP)(\d{1,4})\b/i.exec(full);
     }
 
     if (m) {
-      const hp = toInt(m[1], 1);
-      return {
-        value: clamp(hp, 1, 9999),
-        formula: (m[2] || "").trim(),
-        confidence: hp > 0 ? "high" : "low",
-      };
+      const hp = clamp(toInt(m[1], 1), 1, 9999);
+      const formula = (m[2] || "").trim();
+      return { value: hp, formula, confidence: hp > 1 ? "high" : "medium" };
     }
     return { value: 1, formula: "", confidence: "low" };
   }
 
   function parseSpeed(coreLines, allText) {
-    const line = bestLine(coreLines, /\bSpeed\b/i);
-    let m = /\bSpeed\b\s*[:\-]?\s*([^\n]+)/i.exec(line);
-    if (!m) m = /\bSpeed\b\s*[:\-]?\s*([^\n]+)/i.exec(allText);
+    const coreJoin = repairNumericOCR((coreLines || []).join(" "));
+    const full = repairNumericOCR(String(allText || ""));
+
+    // Supports Speed 30 ft and Speed30 ft
+    let m =
+      /\bSpeed\s*[:\-]?\s*([^\n]+)/i.exec(coreJoin) ||
+      /\bSpeed([^\n]+)/i.exec(coreJoin) ||
+      /\bSpeed\s*[:\-]?\s*([^\n]+)/i.exec(full) ||
+      /\bSpeed([^\n]+)/i.exec(full);
+
     if (m) {
-      const speed = m[1].trim();
+      const raw = String(m[1] || "").trim();
+      const speed = raw.replace(/^[:\-]/, "").trim();
       return { value: speed || "30 ft.", confidence: /\bft\b/i.test(speed) ? "high" : "medium" };
     }
     return { value: "30 ft.", confidence: "low" };
@@ -447,18 +455,29 @@
     let cr = "1/8", xp = 0, pb = 2;
     let crConf = "low", pbConf = "low";
 
-    const coreJoin = coreLines.join(" ");
+    const coreJoin = repairNumericOCR((coreLines || []).join(" "));
+    const full = repairNumericOCR(String(allText || ""));
 
-    let m = /\bChallenge\b\s*([0-9]+(?:\/[0-9]+)?)(?:\s*\(([\d,]+)\s*XP\))?/i.exec(coreJoin);
-    if (!m) m = /\b(?:Challenge|CR)\b[^0-9/]{0,12}([0-9]+(?:\/[0-9]+)?)(?:\s*\(([\d,]+)\s*XP\))?/i.exec(allText);
+    // CR variants: CR 10, CR10, Challenge 10, Challenge10
+    let m =
+      /\b(?:Challenge|CR)\s*[:\-]?\s*([0-9]+(?:\/[0-9]+)?)(?:\s*\((?:XP\s*)?([\d,]+)[^)]*\))?/i.exec(coreJoin) ||
+      /\b(?:Challenge|CR)([0-9]+(?:\/[0-9]+)?)\b(?:\s*\((?:XP\s*)?([\d,]+)[^)]*\))?/i.exec(coreJoin) ||
+      /\b(?:Challenge|CR)\s*[:\-]?\s*([0-9]+(?:\/[0-9]+)?)(?:\s*\((?:XP\s*)?([\d,]+)[^)]*\))?/i.exec(full) ||
+      /\b(?:Challenge|CR)([0-9]+(?:\/[0-9]+)?)\b(?:\s*\((?:XP\s*)?([\d,]+)[^)]*\))?/i.exec(full);
+
     if (m) {
       cr = m[1];
       xp = m[2] ? toInt(String(m[2]).replace(/,/g, ""), 0) : 0;
       crConf = "high";
     }
 
-    let p = /\bProficiency Bonus\b\s*([+\-]?\d+)/i.exec(coreJoin);
-    if (!p) p = /\b(?:Proficiency Bonus|PB)\b[^+\-\d]{0,8}([+\-]?\d+)/i.exec(allText);
+    // PB variants: PB +4, PB+4, Proficiency Bonus +4
+    let p =
+      /\b(?:Proficiency\s*Bonus|PB)\s*[:\-]?\s*([+\-]?\d{1,2})\b/i.exec(coreJoin) ||
+      /\b(?:Proficiency\s*Bonus|PB)([+\-]?\d{1,2})\b/i.exec(coreJoin) ||
+      /\b(?:Proficiency\s*Bonus|PB)\s*[:\-]?\s*([+\-]?\d{1,2})\b/i.exec(full) ||
+      /\b(?:Proficiency\s*Bonus|PB)([+\-]?\d{1,2})\b/i.exec(full);
+
     if (p) {
       pb = clamp(toInt(p[1], 2), -5, 20);
       pbConf = "high";
@@ -1554,67 +1573,64 @@ window.registerTool({
 /* v5.8.1 AC stability patch */
 function parseACRobust(coreLines = [], allText = "") {
   const joinedCore = (coreLines || []).join("\n");
-  const text = `${joinedCore}\n${allText || ""}`;
+  const raw = `${joinedCore}\n${allText || ""}`;
 
-  const norm = String(text || "")
-    .replace(/\bA\s*C\b/gi, "AC")
-    .replace(/\bArmor\s*C1ass\b/gi, "Armor Class")
-    .replace(/\b([Il|])(\d)\b/g, "1$2")
-    .replace(/\b(\d)[Oo]\b/g, "$10")
-    .replace(/[|]/g, " ");
+  const norm = String(raw || "")
+    .replace(/[|]/g, " ")
+    .replace(/A\s*C/gi, "AC")
+    .replace(/Armor\s*Class/gi, "Armor Class")
+    .replace(/Armor\s*C1ass/gi, "Armor Class")
+    .replace(/ArmorClass/gi, "Armor Class")
+    .replace(/([Il])(\d)/g, "1$2")      // I5/l5 -> 15
+    .replace(/(\d)[Oo]/g, "$10")       // 1O -> 10
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const lines = norm.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const lines = norm.split(/(?<=[.!?])\s+|
+/).map(s => s.trim()).filter(Boolean);
 
   const isContaminated = (s) =>
-    /\b(melee weapon attack|ranged weapon attack|attack roll|hit:|actions?|reactions?|legendary actions?)\b/i.test(s || "");
-
-  const extract = (line, numStr) => {
-    const idx = line.toLowerCase().indexOf(String(numStr).toLowerCase());
-    let notes = "";
-    if (idx >= 0) {
-      const after = line.slice(idx + String(numStr).length).trim();
-      const m = /^\(([^)]+)\)/.exec(after);
-      if (m) notes = (m[1] || "").trim();
-    }
-    return { value: Number(numStr), notes };
-  };
+    /(melee weapon attack|ranged weapon attack|attack roll|hit:|actions?|reactions?|legendary actions?)/i.test(s || "");
 
   const candidates = [];
+  const push = (value, score, line, notes="") => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 1 || n > 30) return;
+    candidates.push({ value: n, score, line, notes });
+  };
 
+  // Pass 1: strongest anchors (supports AC17 / AC:17 / Armor Class17)
   for (const line of lines) {
-    if (isContaminated(line)) continue;
+    if (!line || isContaminated(line)) continue;
 
-    let m = /^(?:AC|Armor\s*Class)\b\s*[:\-]?\s*(\d{1,2})\b/i.exec(line);
+    let m = /(?:^|\s)(?:AC|Armor\s*Class)\s*[:\-]?\s*(\d{1,2})(?=|\s|$)/i.exec(line);
     if (m) {
-      const n = Number(m[1]);
-      if (n >= 1 && n <= 30) candidates.push({ ...extract(line, m[1]), score: 100 });
+      const hasCoreNeighbors = /(initiative|hp|hit points|speed|cr|pb)/i.test(line);
+      push(m[1], hasCoreNeighbors ? 100 : 95, line);
       continue;
     }
 
-    m = /\bAC\b\s*[:\-]?\s*(\d{1,2})\b(?=[^\n]*(?:Initiative|HP|Hit Points|Speed|$))/i.exec(line);
+    m = /(?:^|\s)AC(\d{1,2})(?=|\s|$)/i.exec(line); // AC17
     if (m) {
-      const n = Number(m[1]);
-      if (n >= 1 && n <= 30) candidates.push({ ...extract(line, m[1]), score: 95 });
+      const hasCoreNeighbors = /(initiative|hp|hit points|speed|cr|pb)/i.test(line);
+      push(m[1], hasCoreNeighbors ? 99 : 93, line);
+      continue;
+    }
+
+    m = /(?:^|\s)Armor\s*Class(\d{1,2})(?=|\s|$)/i.exec(line); // ArmorClass17-ish
+    if (m) {
+      push(m[1], 92, line);
+      continue;
     }
   }
 
+  // Pass 2: top-window anchored fallback
   if (!candidates.length) {
-    for (const line of lines.slice(0, 25)) {
-      if (isContaminated(line)) continue;
-      const m = /\b(?:AC|Armor\s*Class)\b[^0-9]{0,8}(\d{1,2})\b/i.exec(line);
-      if (!m) continue;
-      const n = Number(m[1]);
-      if (n >= 1 && n <= 30) candidates.push({ ...extract(line, m[1]), score: 80 });
-    }
-  }
-
-  if (!candidates.length) {
-    const topWindow = lines.slice(0, 15).join(" ");
-    const m = /\b(?:AC|Armor\s*Class)\b[^0-9]{0,8}(\d{1,2})\b/i.exec(topWindow);
-    if (m) {
-      const n = Number(m[1]);
-      if (n >= 1 && n <= 30) candidates.push({ value: n, notes: "", score: 60 });
-    }
+    const top = lines.slice(0, 20).join(" ");
+    let m = /(?:^|\s)(?:AC|Armor\s*Class)\s*[:\-]?\s*(\d{1,2})(?=|\s|$)/i.exec(top);
+    if (!m) m = /(?:^|\s)AC(\d{1,2})(?=|\s|$)/i.exec(top);
+    if (!m) m = /(?:^|\s)Armor\s*Class(\d{1,2})(?=|\s|$)/i.exec(top);
+    if (m) push(m[1], 80, top);
   }
 
   if (candidates.length) {
@@ -1624,11 +1640,12 @@ function parseACRobust(coreLines = [], allText = "") {
       value: best.value,
       notes: best.notes || "",
       confidence: best.score >= 95 ? "high" : best.score >= 80 ? "medium" : "low",
+      acSourceLine: best.line || "",
       _source: "anchored"
     };
   }
 
-  return { value: 10, notes: "", confidence: "low", _source: "default" };
+  return { value: 10, notes: "", confidence: "low", acSourceLine: "", _source: "default" };
 }
 
 // keep parseAC name used elsewhere
