@@ -435,20 +435,46 @@
   function parseSpeed(coreLines, allText) {
     const coreJoin = repairNumericOCR((coreLines || []).join(" "));
     const full = repairNumericOCR(String(allText || ""));
+    const text = `${coreJoin} ${full}`.replace(/\s+/g, " ").trim();
 
-    // Supports Speed 30 ft and Speed30 ft
-    let m =
-      /\bSpeed\s*[:\-]?\s*([^\n]+)/i.exec(coreJoin) ||
-      /\bSpeed([^\n]+)/i.exec(coreJoin) ||
-      /\bSpeed\s*[:\-]?\s*([^\n]+)/i.exec(full) ||
-      /\bSpeed([^\n]+)/i.exec(full);
+    // locate Speed label (supports Speed30 / Speed: 30)
+    const m = /\bSpeed\b\s*[:\-]?\s*/i.exec(text) || /\bSpeed(?=\d)/i.exec(text);
+    if (!m) return { value: "30 ft.", confidence: "low" };
 
-    if (m) {
-      const raw = String(m[1] || "").trim();
-      const speed = raw.replace(/^[:\-]/, "").trim();
-      return { value: speed || "30 ft.", confidence: /\bft\b/i.test(speed) ? "high" : "medium" };
+    const start = (m.index || 0) + m[0].length;
+    let tail = text.slice(start).trim();
+
+    // stop at next known field/section boundary
+    const boundaryRe = /\b(?:STR|DEX|CON|INT|WIS|CHA|AC|Armor\s*Class|HP|Hit\s*Points|Initiative|CR|Challenge|PB|Proficiency\s*Bonus|Saving\s*Throws?|Skills?|Senses?|Languages?|Traits?|Actions?|Reactions?|Legendary\s*Actions?)\b/i;
+    const b = tail.search(boundaryRe);
+    if (b >= 0) tail = tail.slice(0, b);
+
+    // remove obvious bleed
+    tail = tail
+      .replace(/\bHit\s*Points?\b[\s\S]*$/i, "")
+      .replace(/\bCR\b[\s\S]*$/i, "")
+      .replace(/\bSTR\b[\s\S]*$/i, "")
+      .trim();
+
+    // keep only speed-ish segments
+    const parts = tail
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((s) => /\b\d+\s*ft\.?\b/i.test(s) || /\bhover\b/i.test(s));
+
+    let value = parts.join(", ").replace(/\s{2,}/g, " ").trim();
+
+    // final sanitation against contamination
+    if (/\b(?:STR|DEX|CON|INT|WIS|CHA|CR|Challenge|Hit\s*Points?|Melee Weapon Attack|Ranged Weapon Attack|Hit:)\b/i.test(value)) {
+      value = value
+        .split(/[,;]/)
+        .map((x) => x.trim())
+        .filter((x) => /\b\d+\s*ft\.?\b/i.test(x) || /\bhover\b/i.test(x))
+        .join(", ");
     }
-    return { value: "30 ft.", confidence: "low" };
+
+    return { value: value || "30 ft.", confidence: value ? "high" : "low" };
   }
 
   function parseCRPB(coreLines, allText) {
