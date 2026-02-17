@@ -11,7 +11,8 @@
     parsed: null,
     status: "idle", // idle | loading-lib | ocr | done | error
     progress: 0,
-    error: ""
+    error: "",
+    lastInputMethod: "" // "paste" | "file"
   };
 
   function esc(s) {
@@ -62,6 +63,26 @@
     saveDrafts(drafts.slice(0, 100));
   }
 
+  function blobToDataURL(blob) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result || ""));
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  async function setImageFromBlob(blob, { labelEl, panelEl, method = "" }) {
+    if (!blob || !blob.type || !blob.type.startsWith("image/")) return false;
+    state.imageDataUrl = await blobToDataURL(blob);
+    state.error = "";
+    state.status = "idle";
+    state.progress = 0;
+    state.lastInputMethod = method;
+    render({ labelEl, panelEl });
+    return true;
+  }
+
   async function ensureTesseractLoaded() {
     if (window.Tesseract) return;
 
@@ -90,7 +111,6 @@
     const firstLine = lines[0] || "Unknown Monster";
     const secondLine = lines[1] || "";
 
-    // Size/type/alignment common pattern
     let sizeType = "";
     let alignment = "";
     {
@@ -196,18 +216,30 @@
 
   function template() {
     const progressPct = Math.round((state.progress || 0) * 100);
-
     return `
       <div class="tool-panel" style="display:grid;gap:12px;">
         <div>
           <h2 style="margin:0 0 6px 0;">Stat Block Importer (MVP)</h2>
-          <div class="muted">Upload screenshot → OCR locally → parse core fields → save draft.</div>
+          <div class="muted">Paste screenshot (Win+Shift+S → Ctrl+V) or upload image → OCR locally → parse core fields.</div>
+        </div>
+
+        <div id="sbi-paste-zone"
+             tabindex="0"
+             style="padding:14px;border:1px dashed rgba(255,255,255,.30);border-radius:10px;outline:none;">
+          <strong>Paste Screenshot</strong><br>
+          Click here, then press <kbd>Ctrl</kbd> + <kbd>V</kbd> (or <kbd>Cmd</kbd> + <kbd>V</kbd>)
         </div>
 
         <label style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span>Image:</span>
+          <span>Or Upload File:</span>
           <input id="sbi-file" type="file" accept="image/*" />
         </label>
+
+        ${
+          state.lastInputMethod
+            ? `<div class="muted">Loaded via: <strong>${esc(state.lastInputMethod)}</strong></div>`
+            : ""
+        }
 
         ${state.status === "loading-lib" ? `<div>Loading OCR library…</div>` : ""}
         ${state.status === "ocr" ? `<div>OCR in progress: <strong>${progressPct}%</strong></div>` : ""}
@@ -216,7 +248,7 @@
         ${
           state.imageDataUrl
             ? `<img src="${state.imageDataUrl}" alt="Preview" style="max-width:100%;max-height:260px;border:1px solid rgba(255,255,255,.18);border-radius:10px;" />`
-            : `<div style="padding:20px;border:1px dashed rgba(255,255,255,.25);border-radius:10px;">Upload a stat block screenshot to begin.</div>`
+            : `<div style="padding:20px;border:1px dashed rgba(255,255,255,.25);border-radius:10px;">No image loaded yet.</div>`
         }
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -258,23 +290,78 @@
   }
 
   function bind(labelEl, panelEl) {
+    // cleanup old listeners from previous render
+    if (panelEl._sbiCleanup && Array.isArray(panelEl._sbiCleanup)) {
+      for (const fn of panelEl._sbiCleanup) {
+        try { fn(); } catch {}
+      }
+    }
+    panelEl._sbiCleanup = [];
+
     const fileEl = panelEl.querySelector("#sbi-file");
+    const pasteZone = panelEl.querySelector("#sbi-paste-zone");
     const runBtn = panelEl.querySelector("#sbi-run");
     const clearBtn = panelEl.querySelector("#sbi-clear");
     const reparseBtn = panelEl.querySelector("#sbi-reparse");
     const saveBtn = panelEl.querySelector("#sbi-save");
     const copyBtn = panelEl.querySelector("#sbi-copy");
 
-    fileEl?.addEventListener("change", (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const fr = new FileReader();
-      fr.onload = () => {
-        state.imageDataUrl = String(fr.result || "");
-        state.error = "";
+    fileEl?.addEventListener("change", async (e) => {
+      try {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await setImageFromBlob(file, { labelEl, panelEl, method: "file upload" });
+      } catch (err) {
+        state.status = "error";
+        state.error = `File load failed: ${err?.message || err}`;
         render({ labelEl, panelEl });
-      };
-      fr.readAsDataURL(file);
+      }
+    });
+
+    // focused paste zone handler
+    const onZonePaste = async (e) => {
+      try {
+        const items = e.clipboardData?.items || [];
+        for (const item of items) {
+          if (item.type && item.type.startsWith("image/")) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            if (blob) {
+              await setImageFromBlob(blob, { labelEl, panelEl, method: "clipboard paste" });
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        state.status = "error";
+        state.error = `Paste failed: ${err?.message || err}`;
+        render({ labelEl, panelEl });
+      }
+    };
+
+    pasteZone?.addEventListener("click", () => pasteZone.focus());
+    pasteZone?.addEventListener("paste", onZonePaste);
+
+    // global paste while this tool is open
+    const onGlobalPaste = async (e) => {
+      if (!panelEl || !panelEl.isConnected) return;
+      const items = e.clipboardData?.items || [];
+      for (const item of items) {
+        if (item.type && item.type.startsWith("image/")) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (blob) {
+            await setImageFromBlob(blob, { labelEl, panelEl, method: "clipboard paste" });
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener("paste", onGlobalPaste);
+
+    panelEl._sbiCleanup.push(() => {
+      window.removeEventListener("paste", onGlobalPaste);
+      pasteZone?.removeEventListener("paste", onZonePaste);
     });
 
     clearBtn?.addEventListener("click", () => {
@@ -284,6 +371,7 @@
       state.status = "idle";
       state.progress = 0;
       state.error = "";
+      state.lastInputMethod = "";
       render({ labelEl, panelEl });
     });
 
@@ -302,10 +390,8 @@
           logger: (m) => {
             if (m?.status === "recognizing text" && Number.isFinite(m.progress)) {
               state.progress = m.progress;
-              // lightweight progress refresh
-              const runText = panelEl.querySelector("#sbi-run");
-              const statusRow = panelEl.querySelector("div");
-              if (runText) runText.textContent = `Run OCR + Parse (${Math.round(m.progress * 100)}%)`;
+              const statusEl = panelEl.querySelector("#sbi-ocr-progress-inline");
+              if (statusEl) statusEl.textContent = `${Math.round(m.progress * 100)}%`;
             }
           }
         });
@@ -357,7 +443,7 @@
   window.registerTool({
     id: TOOL_ID,
     name: TOOL_NAME,
-    description: "Upload a screenshot and parse monster stats locally (no API).",
+    description: "Paste or upload screenshot, OCR locally, parse monster core fields.",
     render
   });
 })();
