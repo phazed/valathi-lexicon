@@ -772,66 +772,99 @@
 
   function statBlockPreview(m) {
     if (!m) return "";
-    const miscRows = [
-      ["Saving Throws", listToLine(m.saves)],
+
+    const toNum = (v, d=10) => Number.isFinite(Number(v)) ? Number(v) : d;
+    const mod = (s) => Math.floor((toNum(s,10)-10)/2);
+    const fmtMod = (n) => (n>=0?`+${n}`:`${n}`);
+
+    const xp = Number.isFinite(Number(m.xp)) ? Number(m.xp) : 0;
+    const pb = Number.isFinite(Number(m.proficiencyBonus)) ? Number(m.proficiencyBonus) : null;
+
+    const saveFromList = (abbr) => {
+      const list = Array.isArray(m.saves) ? m.saves : String(m.saves||"").split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
+      const re = new RegExp(`^${abbr}\\b|^${abbr.toLowerCase()}\\b`, "i");
+      for (const s of list) {
+        if (re.test(s)) {
+          const mm = s.match(/([+-]\\s*\\d+)/);
+          return mm ? mm[1].replace(/\\s+/g,"") : s.replace(/^\\w+\\s*/,"");
+        }
+      }
+      return null;
+    };
+
+    const abilities = [
+      ["STR","str"],["DEX","dex"],["CON","con"],["INT","int"],["WIS","wis"],["CHA","cha"]
+    ].map(([abbr,key]) => {
+      const score = toNum(m[key],10);
+      const mmod = fmtMod(mod(score));
+      const sv = saveFromList(abbr) || m[`${key}Save`] || m[`${abbr.toLowerCase()}Save`] || mmod;
+      return {abbr, score, mod:mmod, save:String(sv).replace(/\\s+/g,"")};
+    });
+
+    const detailRows = [
       ["Skills", listToLine(m.skills)],
-      ["Vulnerabilities", listToLine(m.vulnerabilities)],
-      ["Resistances", listToLine(m.resistances)],
-      ["Immunities", listToLine(m.immunities)],
+      ["Damage Vulnerabilities", listToLine(m.vulnerabilities)],
+      ["Damage Resistances", listToLine(m.resistances)],
+      ["Damage Immunities", listToLine(m.immunities)],
       ["Condition Immunities", listToLine(m.conditionImmunities)],
       ["Senses", listToLine(m.senses)],
       ["Languages", listToLine(m.languages)],
-      ["Habitats", listToLine(m.habitats)]
-    ].filter(([,v]) => String(v || "").trim());
+      ["Habitat", listToLine(m.habitats)]
+    ].filter(([,v]) => String(v||"").trim());
 
-    const pb = Number.isFinite(Number(m.proficiencyBonus)) ? Number(m.proficiencyBonus) : 2;
-    const xp = Number.isFinite(Number(m.xp)) ? Number(m.xp) : 0;
-    const actionCount = (m.actions?.length || 0) + (m.bonusActions?.length || 0) + (m.reactions?.length || 0) + (m.legendaryActions?.length || 0);
+    const renderEntries = (title, arr) => {
+      const rows = Array.isArray(arr)?arr:[];
+      if (!rows.length) return "";
+      return `
+        <section style="margin-top:10px;">
+          <div style="font-weight:800;border-bottom:1px solid rgba(255,255,255,.18);padding-bottom:4px;margin-bottom:6px;">${esc(title)}</div>
+          ${rows.map(e=>`<div style="margin:0 0 6px 0;line-height:1.45;"><b>${esc(e.name||"")}${e.name?". ":""}</b>${esc(e.text||"")}</div>`).join("")}
+        </section>`;
+    };
 
     return `
-      <div style="margin-top:8px;border:1px solid rgba(255,255,255,.18);border-radius:14px;overflow:hidden;background:#111;">
-        <div style="position:sticky;top:0;z-index:2;padding:12px;border-bottom:1px solid rgba(255,255,255,.14);background:#121212;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-            <h3 style="margin:0;font-size:20px;">${esc(m.name || 'Unknown Monster')}</h3>
+      <div style="margin-top:8px;border:1px solid rgba(255,255,255,.22);border-radius:12px;overflow:auto;max-height:72vh;background:#121212;">
+        <div style="position:sticky;top:0;z-index:2;background:#151515;border-bottom:1px solid rgba(255,255,255,.14);padding:10px 12px;">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:20px;font-weight:900;line-height:1.1;">${esc(m.name || "Unknown Monster")}</div>
+              <div class="muted" style="margin-top:2px;">${esc(m.sizeType || "—")}${m.alignment?` • ${esc(m.alignment)}`:""}</div>
+            </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <span style="font-size:11px;padding:2px 8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;">CR ${esc(m.cr || '—')}</span>
+              <span style="font-size:11px;padding:2px 8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;">CR ${esc(m.cr || "—")}</span>
               <span style="font-size:11px;padding:2px 8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;">XP ${xp.toLocaleString()}</span>
-              <span style="font-size:11px;padding:2px 8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;">PB ${pb>=0?'+':''}${pb}</span>
+              ${pb!==null?`<span style="font-size:11px;padding:2px 8px;border:1px solid rgba(255,255,255,.2);border-radius:999px;">PB ${pb>=0?"+":""}${pb}</span>`:""}
             </div>
           </div>
-          <div class="muted" style="margin-top:4px;">${esc(m.sizeType || '—')}${m.alignment ? `, ${esc(m.alignment)}` : ''}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px;">
-            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">AC</div><b>${esc(m.ac)}</b>${m.acText ? `<div class="muted" style="font-size:10px;">${esc(m.acText)}</div>` : ''}</div>
-            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">HP</div><b>${esc(m.hp)}</b>${m.hpFormula ? `<div class="muted" style="font-size:10px;">${esc(m.hpFormula)}</div>` : ''}</div>
-            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">Speed</div><b>${esc(m.speed || '—')}</b></div>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px;">
+            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">AC</div><b>${esc(m.ac ?? "—")}</b></div>
+            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">HP</div><b>${esc(m.hp ?? "—")}</b>${m.hpFormula?`<div class="muted" style="font-size:10px;">(${esc(m.hpFormula)})</div>`:""}</div>
+            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">Speed</div><b style="font-size:12px;">${esc(m.speed || "—")}</b></div>
+            <div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><div class="muted" style="font-size:10px;">Initiative</div><b>${esc(m.initiative || "—")}</b></div>
           </div>
         </div>
 
-        <div class="mv-details" style="padding:12px;">
-          <div class="mv-details-grid" style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;">
-            ${['str','dex','con','int','wis','cha'].map((k) => `<div class="mv-statline" style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><span style="display:block;font-size:10px;opacity:.8;text-transform:uppercase;">${k}</span><b>${esc(m[k] ?? 10)}</b></div>`).join('')}
-            <div class="mv-statline" style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><span style="display:block;font-size:10px;opacity:.8;">PB</span><b>${pb>=0?'+':''}${pb}</b></div>
-            <div class="mv-statline" style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;"><span style="display:block;font-size:10px;opacity:.8;">XP</span><b>${xp.toLocaleString()}</b></div>
+        <div style="padding:12px;">
+          <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;">
+            ${abilities.map(a=>`<div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;">
+              <div class="muted" style="font-size:10px;">${a.abbr}</div>
+              <div style="font-weight:800;">${a.score} (${a.mod})</div>
+              <div class="muted" style="font-size:10px;">Save ${esc(String(a.save))}</div>
+            </div>`).join("")}
           </div>
 
-          ${miscRows.length ? `<div class="mv-detail-lines" style="margin-top:10px;display:grid;gap:6px;">${miscRows.map(([k,v]) => `<div class="mv-detail-line" style="display:grid;grid-template-columns:180px 1fr;gap:8px;"><span class="muted">${esc(k)}</span><b style="font-weight:600;">${esc(v)}</b></div>`).join('')}</div>` : ''}
+          ${detailRows.length ? `<div style="margin-top:10px;display:grid;gap:4px;">${detailRows.map(([k,v])=>`<div><span class="muted">${esc(k)}:</span> ${esc(v)}</div>`).join("")}</div>` : ""}
 
-          ${renderMvFeatureList('Traits', m.traits)}
-          ${actionCount ? `
-            ${renderMvFeatureList('Actions', m.actions)}
-            ${renderMvFeatureList('Bonus Actions', m.bonusActions)}
-            ${renderMvFeatureList('Reactions', m.reactions)}
-            ${renderMvFeatureList('Legendary Actions', m.legendaryActions)}
-          ` : `<div class="muted" style="margin-top:8px;">No actions recorded yet.</div>`}
+          ${renderEntries("Traits", m.traits)}
+          ${renderEntries("Actions", m.actions)}
+          ${renderEntries("Bonus Actions", m.bonusActions)}
+          ${renderEntries("Reactions", m.reactions)}
+          ${renderEntries("Legendary Actions", m.legendaryActions)}
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
-  // -------------------------
-  // Template
-  // -------------------------
-  function template() {
+function template() {
     const p = state.parsed;
     const progressPct = Math.round((state.progress || 0) * 100);
 
@@ -1316,7 +1349,61 @@ parseStatBlock = function(rawInput){
 };
 
 
-  window.registerTool({
+  
+// ---- v5.6 parse normalization hardening ----
+const __parseStatBlock_v55 = parseStatBlock;
+parseStatBlock = function(rawText) {
+  const result = __parseStatBlock_v55(rawText);
+  try {
+    const txt = String(rawText || "");
+    const lines = splitLines(normalizeOcr(txt));
+    const headerZone = lines.slice(0, Math.min(lines.length, 40));
+
+    const acCandidates = [];
+    for (const l of headerZone) {
+      const line = repairNumericOCR(l);
+      let m = line.match(/\b(?:AC|Armor\s*Class)\b\s*[:\-]?\s*(\d{1,2})\b/i);
+      if (m) acCandidates.push(Number(m[1]));
+      m = line.match(/\bAC\b\s*(\d{1,2})\b(?=[^\n]*(?:Initiative|HP|Speed|$))/i);
+      if (m) acCandidates.push(Number(m[1]));
+    }
+    const acValid = acCandidates.filter(n=>n>=1&&n<=30);
+    if (acValid.length) result.ac = acValid[0];
+
+    if (!result.initiative) {
+      const il = headerZone.find(l=>/\binitiative\b/i.test(l));
+      if (il) {
+        const m = repairNumericOCR(il).match(/\binitiative\b\s*[:\-]?\s*([+\-]?\d+(?:\s*\([^)]*\))?)/i);
+        if (m) result.initiative = m[1].replace(/\s+/g," ").trim();
+      }
+    }
+
+    const immLine = lines.find(l=>/^\s*Immunities\b/i.test(l));
+    if (immLine) {
+      const parsed = parseCompactImmunitiesLine(immLine);
+      if (parsed) {
+        result.immunities = uniq([...(result.immunities||[]), ...(parsed.damage||[])]);
+        result.conditionImmunities = uniq([...(result.conditionImmunities||[]), ...(parsed.conditions||[])]);
+      }
+    }
+
+    if (!result.languages || !result.languages.length) {
+      const lang = lines.find(l=>/understands|can't speak|telepathy|languages?/i.test(l));
+      if (lang) {
+        const cleaned = lang.replace(/^\s*Languages?\b[:\s]*/i,"").trim();
+        if (cleaned) result.languages = [cleaned];
+      }
+    }
+
+    result.sizeType = sanitizeSizeType(result.sizeType);
+    result.alignment = sanitizeAlignment(result.alignment);
+    result.languages = sanitizeListField(result.languages||[], "languages");
+    result.senses = sanitizeListField(result.senses||[], "senses");
+  } catch(e) {}
+  return result;
+};
+
+window.registerTool({
     id: TOOL_ID,
     name: TOOL_NAME,
     description: "Paste/upload screenshot, OCR locally, section-first parse with raw fallbacks.",
