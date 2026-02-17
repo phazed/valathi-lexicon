@@ -6,6 +6,7 @@ import "./tool-monster-vault.js";
 import "./tool-text-cleaner.js";
 import "./tool-dice-roller.js";
 import "./tool-encounter.js";
+import "./tool-statblock-importer.js";
 
 // In the future:
 // 1) Create "tool-my-new-thing.js"
