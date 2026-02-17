@@ -13,7 +13,6 @@
     progress: 0,
     error: "",
     lastInputMethod: "",
-    previewTheme: "2024",
   };
 
   // -------------------------
@@ -504,6 +503,55 @@
     return out;
   }
 
+
+  function parseAbilityTriplets(coreLines, allText) {
+    const src = `${coreLines.join(" ")} ${allText}`.replace(/\s+/g, " ").trim();
+    const out = {
+      strSave: null, dexSave: null, conSave: null, intSave: null, wisSave: null, chaSave: null,
+      confidence: "low"
+    };
+    const keyMap = { STR:"str", DEX:"dex", CON:"con", INT:"int", WIS:"wis", CHA:"cha" };
+    const re = /\b(STR|DEX|CON|INT|WIS|CHA)\b([\s\S]*?)(?=\b(?:STR|DEX|CON|INT|WIS|CHA)\b|$)/gi;
+    let m, count=0;
+    while ((m = re.exec(src)) !== null) {
+      const ab = m[1].toUpperCase();
+      const chunk = m[2];
+      const scoreMatch = chunk.match(/(?:^|\s)(\d{1,2})(?:\s|$)/);
+      if (!scoreMatch) continue;
+      const after = chunk.slice((scoreMatch.index || 0) + scoreMatch[0].length);
+      const signed = [...after.matchAll(/([+\-]\d{1,2})/g)].map(x => Number(x[1]));
+      const k = keyMap[ab];
+      if (Number.isFinite(signed[1])) {
+        out[`${k}Save`] = signed[1];
+        count++;
+      } else if (Number.isFinite(signed[0])) {
+        // fallback to mod if explicit save missing
+        out[`${k}Save`] = signed[0];
+      }
+    }
+    out.confidence = count >= 4 ? "high" : (count >= 2 ? "medium" : "low");
+    return out;
+  }
+
+  function parseSaves(metaLines, coreLines, allText) {
+    // 1) labeled line wins
+    const labeled = parseMetaList(metaLines, "Saving Throws|Saves");
+    const cleaned = (Array.isArray(labeled) ? labeled : [])
+      .map(s => String(s || "").trim())
+      .filter(Boolean)
+      .map(s => s.replace(/\b(STR|DEX|CON|INT|WIS|CHA)\.?\s*/i, (m) => m.toUpperCase().replace(".", "") + " "))
+      .map(s => s.replace(/\s+/g, " "));
+    if (cleaned.length) return cleaned;
+
+    // 2) reconstruct from ability triplets
+    const tr = parseAbilityTriplets(coreLines, allText);
+    const order = [["STR","strSave"],["DEX","dexSave"],["CON","conSave"],["INT","intSave"],["WIS","wisSave"],["CHA","chaSave"]];
+    const arr = order
+      .filter(([,k]) => Number.isFinite(tr[k]))
+      .map(([abbr,k]) => `${abbr} ${tr[k] >= 0 ? "+" : ""}${tr[k]}`);
+    return arr;
+  }
+
   function parseMetaList(metaLines, labelRegex) {
     const re = new RegExp(`\\b(?:${labelRegex})\\b\\s*(.+)$`, "i");
     for (const line of metaLines) {
@@ -580,7 +628,7 @@
     const crpb = parseCRPB(preSplit.core, allText);
     const abil = parseAbilities(preSplit.core, allText);
 
-    const saves = parseMetaList(preSplit.meta, "Saving Throws");
+    const saves = parseSaves(preSplit.meta, preSplit.core, allText);
     const skills = parseMetaList(preSplit.meta, "Skills");
     const vulnerabilities = parseMetaList(preSplit.meta, "Damage Vulnerabilities");
     const resistances = parseMetaList(preSplit.meta, "Damage Resistances");
@@ -954,7 +1002,7 @@ function statBlockPreview5etools(m) {
 
 
   function statBlockPreview(m) {
-    return state.previewTheme === "5etools" ? statBlockPreview5etools(m) : statBlockPreview2024(m);
+    return statBlockPreview2024(m);
   }
 
 function template() {
@@ -1073,8 +1121,7 @@ function template() {
 
               <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                 <button id="sbi-preview-hover-btn" type="button">Stat Block Preview (Hover)</button>
-                <label style="display:inline-flex;align-items:center;gap:6px;">Theme <select id="sbi-preview-theme"><option value="2024">2024 Style</option><option value="5etools">5etools-like Compact</option></select></label>
-                <span class="muted">Hover button to preview standardized card.</span>
+                                <span class="muted">Hover button to preview standardized card.</span>
               </div>
 
               <div id="sbi-hover-preview" style="display:none;position:fixed;z-index:99999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(980px,94vw);max-height:90vh;overflow:auto;background:#121212;border:1px solid rgba(255,255,255,.25);border-radius:12px;box-shadow:0 30px 90px rgba(0,0,0,.6);padding:12px;">
