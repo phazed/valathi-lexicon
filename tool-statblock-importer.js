@@ -1550,4 +1550,122 @@ window.registerTool({
     description: "Paste/upload screenshot, OCR locally, section-first parse with raw fallbacks.",
     render,
   });
+
+/* v5.8.1 AC stability patch */
+function parseACRobust(coreLines = [], allText = "") {
+  const joinedCore = (coreLines || []).join("\n");
+  const text = `${joinedCore}\n${allText || ""}`;
+
+  const norm = String(text || "")
+    .replace(/\bA\s*C\b/gi, "AC")
+    .replace(/\bArmor\s*C1ass\b/gi, "Armor Class")
+    .replace(/\b([Il|])(\d)\b/g, "1$2")
+    .replace(/\b(\d)[Oo]\b/g, "$10")
+    .replace(/[|]/g, " ");
+
+  const lines = norm.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+
+  const isContaminated = (s) =>
+    /\b(melee weapon attack|ranged weapon attack|attack roll|hit:|actions?|reactions?|legendary actions?)\b/i.test(s || "");
+
+  const extract = (line, numStr) => {
+    const idx = line.toLowerCase().indexOf(String(numStr).toLowerCase());
+    let notes = "";
+    if (idx >= 0) {
+      const after = line.slice(idx + String(numStr).length).trim();
+      const m = /^\(([^)]+)\)/.exec(after);
+      if (m) notes = (m[1] || "").trim();
+    }
+    return { value: Number(numStr), notes };
+  };
+
+  const candidates = [];
+
+  for (const line of lines) {
+    if (isContaminated(line)) continue;
+
+    let m = /^(?:AC|Armor\s*Class)\b\s*[:\-]?\s*(\d{1,2})\b/i.exec(line);
+    if (m) {
+      const n = Number(m[1]);
+      if (n >= 1 && n <= 30) candidates.push({ ...extract(line, m[1]), score: 100 });
+      continue;
+    }
+
+    m = /\bAC\b\s*[:\-]?\s*(\d{1,2})\b(?=[^\n]*(?:Initiative|HP|Hit Points|Speed|$))/i.exec(line);
+    if (m) {
+      const n = Number(m[1]);
+      if (n >= 1 && n <= 30) candidates.push({ ...extract(line, m[1]), score: 95 });
+    }
+  }
+
+  if (!candidates.length) {
+    for (const line of lines.slice(0, 25)) {
+      if (isContaminated(line)) continue;
+      const m = /\b(?:AC|Armor\s*Class)\b[^0-9]{0,8}(\d{1,2})\b/i.exec(line);
+      if (!m) continue;
+      const n = Number(m[1]);
+      if (n >= 1 && n <= 30) candidates.push({ ...extract(line, m[1]), score: 80 });
+    }
+  }
+
+  if (!candidates.length) {
+    const topWindow = lines.slice(0, 15).join(" ");
+    const m = /\b(?:AC|Armor\s*Class)\b[^0-9]{0,8}(\d{1,2})\b/i.exec(topWindow);
+    if (m) {
+      const n = Number(m[1]);
+      if (n >= 1 && n <= 30) candidates.push({ value: n, notes: "", score: 60 });
+    }
+  }
+
+  if (candidates.length) {
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    return {
+      value: best.value,
+      notes: best.notes || "",
+      confidence: best.score >= 95 ? "high" : best.score >= 80 ? "medium" : "low",
+      _source: "anchored"
+    };
+  }
+
+  return { value: 10, notes: "", confidence: "low", _source: "default" };
+}
+
+// keep parseAC name used elsewhere
+parseAC = parseACRobust;
+
+// harden final parse output with anchored AC overwrite
+const __v58_prevParseStatBlock = parseStatBlock;
+parseStatBlock = function(rawInput) {
+  let result = __v58_prevParseStatBlock(rawInput);
+  try {
+    const cleaned = normalizeOcr(rawInput || "");
+    const lines = splitLines(cleaned);
+    const sliced = sliceByHeaders(lines);
+    const preSplit = splitPreIntoCoreMetaTraits(sliced.pre || []);
+    const ac = parseACRobust(preSplit.core || [], cleaned);
+
+    result = result || {};
+    result.confidence = result.confidence || {};
+
+    const currentAc = Number(result.ac);
+    const currentConf = String(result.confidence.ac || "").toLowerCase();
+    const nextConf = String(ac.confidence || "").toLowerCase();
+
+    const shouldOverwrite = (
+      !Number.isFinite(currentAc) ||
+      currentAc < 1 || currentAc > 30 ||
+      currentConf !== "high" ||
+      nextConf === "high"
+    );
+
+    if (shouldOverwrite) {
+      result.ac = ac.value;
+      result.acText = ac.notes || "";
+      result.confidence.ac = ac.confidence;
+    }
+  } catch (e) { /* no-op */ }
+  return result;
+};
+
 })();
