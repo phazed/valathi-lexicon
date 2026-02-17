@@ -866,68 +866,92 @@
   }
 
 
-  function statBlockPreview5etools(m) {
+  
+function statBlockPreview5etools(m) {
     if (!m) return "";
-    const toNum = (v, d=10) => Number.isFinite(Number(v)) ? Number(v) : d;
-    const mod = (s) => Math.floor((toNum(s,10)-10)/2);
-    const fmtMod = (n) => (n>=0?`+${n}`:`${n}`);
-    const xp = Number.isFinite(Number(m.xp)) ? Number(m.xp) : 0;
-    const pb = Number.isFinite(Number(m.proficiencyBonus)) ? Number(m.proficiencyBonus) : null;
-    const saves = Array.isArray(m.saves) ? m.saves : String(m.saves||"").split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
-
-    const abilities = [["STR","str"],["DEX","dex"],["CON","con"],["INT","int"],["WIS","wis"],["CHA","cha"]].map(([abbr,key])=>{
+    const toNum = (v,d=10)=>Number.isFinite(Number(v))?Number(v):d;
+    const mod = (s)=>Math.floor((toNum(s,10)-10)/2);
+    const fmtMod=(n)=>n>=0?`+${n}`:`${n}`;
+    const arr = (v)=>Array.isArray(v)?v:String(v||"").split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
+    const line = (label, value)=> value ? `<div><span class="lbl">${esc(label)} </span>${esc(value)}</div>` : "";
+    const abilityCell=(abbr,key)=> {
       const score = toNum(m[key],10);
-      const svRaw = saves.find(s=>new RegExp(`^${abbr}\\b`,'i').test(s)) || m[`${key}Save`] || "";
-      const sv = String(svRaw).match(/([+-]\d+)/)?.[1] || fmtMod(mod(score));
-      return {abbr, score, mod:fmtMod(mod(score)), save:sv};
-    });
-
-    const line = (label, val) => val ? `<div><b>${esc(label)}</b> ${esc(val)}</div>` : "";
-    const joinList = (v)=> Array.isArray(v)?v.filter(Boolean).join(", "):String(v||"");
-
-    const sec = (title, arr) => {
-      const rows = Array.isArray(arr)?arr:[];
-      if (!rows.length) return "";
-      return `<div style="margin-top:10px;"><div style="font-weight:800;border-bottom:1px solid rgba(255,255,255,.2);padding-bottom:2px;">${esc(title)}</div>${
-        rows.map(e=>`<div style="margin-top:4px;"><b>${esc(e?.name||"")}${e?.name?". ":""}</b>${esc(e?.text||"")}</div>`).join("")
-      }</div>`;
+      const saveKey = key + "Save";
+      const sv = m[saveKey];
+      const saveTxt = (sv===0 || sv) ? (String(sv).startsWith("+")||String(sv).startsWith("-")?String(sv):`+${sv}`) : fmtMod(mod(score));
+      return `<div class="ab"><div class="a">${abbr}</div><div class="s">${score}</div><div class="m">${fmtMod(mod(score))}</div><div class="sv">Save ${saveTxt}</div></div>`;
     };
-
-    return `<div style="margin-top:8px;border:1px solid rgba(255,255,255,.2);border-radius:10px;background:#111;max-height:74vh;overflow:auto;">
-      <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.14);">
-        <div style="font-size:22px;font-weight:900;line-height:1.05;">${esc(m.name||"Unknown Monster")}</div>
-        <div style="font-style:italic;opacity:.9;margin-top:2px;">${esc(m.sizeType||"—")}${m.alignment?`, ${esc(m.alignment)}`:""}</div>
-      </div>
-      <div style="padding:10px 12px;display:grid;gap:6px;line-height:1.4;">
-        ${line("Armor Class", `${m.ac ?? "—"}${m.acText?` (${m.acText})`:""}`)}
-        ${line("Hit Points", `${m.hp ?? "—"}${m.hpFormula?` (${m.hpFormula})`:""}`)}
-        ${line("Speed", m.speed || "—")}
-        ${line("Initiative", m.initiative || "—")}
-        <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:4px;">
-          ${abilities.map(a=>`<div style="border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:5px;text-align:center;">
-            <div style="font-size:11px;opacity:.8;">${a.abbr}</div>
-            <div style="font-weight:800;">${a.score}</div>
-            <div style="font-size:11px;">${a.mod}</div>
-            <div style="font-size:11px;opacity:.85;">save ${a.save}</div>
-          </div>`).join("")}
+    const renderEntries=(title,list)=>{
+      const a = Array.isArray(list)?list:[];
+      if(!a.length) return "";
+      return `<div class="sec"><div class="sec-h">${esc(title)}</div>${a.map(e=>`<p><b>${esc(e?.name||"")}${e?.name?". ":""}</b>${esc(e?.text||"")}</p>`).join("")}</div>`;
+    };
+    const xp = Number.isFinite(Number(m.xp)) ? Number(m.xp).toLocaleString() : "";
+    const pb = (m.proficiencyBonus || m.proficiencyBonus===0) ? (String(m.proficiencyBonus).startsWith("+")?String(m.proficiencyBonus):`+${m.proficiencyBonus}`) : "";
+    return `
+      <div class="sb5e-wrap">
+        <style>
+          .sb5e-wrap{background:#f7f1e6;color:#1f1a17;border:1px solid #7a5a2d;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:13px;line-height:1.35}
+          .sb5e-head{padding:10px 12px;border-bottom:2px solid #7a5a2d}
+          .sb5e-name{font:700 26px/1.05 Georgia,serif;letter-spacing:.3px}
+          .sb5e-sub{font-style:italic;opacity:.9;margin-top:2px}
+          .sb5e-rule{border-top:2px solid #7a5a2d;margin:0 12px}
+          .sb5e-core{padding:8px 12px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+          .sb5e-core .k{font-weight:700;color:#5b3e16}
+          .sb5e-abilities{padding:8px 12px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+          .sb5e-abilities .ab{border:1px solid #c9b18c;border-radius:6px;padding:6px;text-align:center;background:#fffaf2}
+          .sb5e-abilities .a{font-weight:700;color:#5b3e16}
+          .sb5e-abilities .s{font-size:18px;font-weight:700}
+          .sb5e-abilities .m{font-size:12px;opacity:.9}
+          .sb5e-abilities .sv{font-size:11px;opacity:.9;margin-top:2px}
+          .sb5e-meta{padding:8px 12px;display:grid;gap:4px}
+          .sb5e-meta .lbl{font-weight:700;color:#5b3e16}
+          .sb5e-sections{padding:8px 12px 12px}
+          .sb5e-sections .sec{margin-top:8px}
+          .sb5e-sections .sec-h{font:700 12px/1.2 Arial,sans-serif;letter-spacing:.08em;color:#5b3e16;border-top:2px solid #7a5a2d;padding-top:6px;margin-bottom:4px;text-transform:uppercase}
+          .sb5e-sections p{margin:0 0 6px 0}
+        </style>
+        <div class="sb5e-head">
+          <div class="sb5e-name">${esc(m.name||"Unnamed Monster")}</div>
+          <div class="sb5e-sub">${esc([m.sizeType,m.alignment].filter(Boolean).join(", "))}</div>
         </div>
-        ${line("Saving Throws", joinList(m.saves))}
-        ${line("Skills", joinList(m.skills))}
-        ${line("Damage Vulnerabilities", joinList(m.vulnerabilities))}
-        ${line("Damage Resistances", joinList(m.resistances))}
-        ${line("Damage Immunities", joinList(m.immunities))}
-        ${line("Condition Immunities", joinList(m.conditionImmunities))}
-        ${line("Senses", joinList(m.senses))}
-        ${line("Languages", joinList(m.languages))}
-        ${line("Challenge", `${m.cr || "—"}${xp?` (${xp.toLocaleString()} XP)`:""}${pb!==null?`; PB ${pb>=0?"+":""}${pb}`:""}`)}
-        ${sec("Traits", m.traits)}
-        ${sec("Actions", m.actions)}
-        ${sec("Bonus Actions", m.bonusActions)}
-        ${sec("Reactions", m.reactions)}
-        ${sec("Legendary Actions", m.legendaryActions)}
+        <div class="sb5e-core">
+          <div><div class="k">AC</div><div>${esc(String(m.ac ?? "—"))}${m.acText?` (${esc(m.acText)})`:""}</div></div>
+          <div><div class="k">HP</div><div>${esc(String(m.hp ?? "—"))}${m.hpFormula?` (${esc(m.hpFormula)})`:""}</div></div>
+          <div><div class="k">Speed</div><div>${esc(m.speed||"—")}</div></div>
+          <div><div class="k">Initiative</div><div>${esc(m.initiative||"—")}</div></div>
+          <div><div class="k">CR / PB</div><div>${esc(String(m.cr||"—"))}${xp?` (${xp} XP)`:""}${pb?` • ${esc(pb)}`:""}</div></div>
+        </div>
+        <div class="sb5e-rule"></div>
+        <div class="sb5e-abilities">
+          ${abilityCell("STR","str")}
+          ${abilityCell("DEX","dex")}
+          ${abilityCell("CON","con")}
+          ${abilityCell("INT","int")}
+          ${abilityCell("WIS","wis")}
+          ${abilityCell("CHA","cha")}
+        </div>
+        <div class="sb5e-meta">
+          ${line("Saving Throws:", arr(m.saves).join(", "))}
+          ${line("Skills:", arr(m.skills).join(", "))}
+          ${line("Damage Vulnerabilities:", arr(m.vulnerabilities).join(", "))}
+          ${line("Damage Resistances:", arr(m.resistances).join(", "))}
+          ${line("Damage Immunities:", arr(m.immunities).join(", "))}
+          ${line("Condition Immunities:", arr(m.conditionImmunities).join(", "))}
+          ${line("Senses:", arr(m.senses).join(", "))}
+          ${line("Languages:", arr(m.languages).join(", "))}
+        </div>
+        <div class="sb5e-sections">
+          ${renderEntries("Traits", m.traits)}
+          ${renderEntries("Actions", m.actions)}
+          ${renderEntries("Bonus Actions", m.bonusActions)}
+          ${renderEntries("Reactions", m.reactions)}
+          ${renderEntries("Legendary Actions", m.legendaryActions)}
+        </div>
       </div>
-    </div>`;
+    `;
   }
+
 
   function statBlockPreview(m) {
     return state.previewTheme === "5etools" ? statBlockPreview5etools(m) : statBlockPreview2024(m);
