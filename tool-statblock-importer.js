@@ -13,6 +13,8 @@
     progress: 0,
     error: "",
     lastInputMethod: "",
+    activeTab: "ocr", // ocr | open5e
+    open5e: { q: "", results: [], next: null, prev: null, loading: false, error: "", selected: null },
   };
 
   // -------------------------
@@ -64,7 +66,133 @@
   // -------------------------
   // Storage
   // -------------------------
-  function loadDrafts() {
+  
+  // ---------------------
+  // Open5e source helpers
+  // ---------------------
+  const OPEN5E_BASE = "https://api.open5e.com";
+  let _open5eSearchTimer = null;
+
+  function normalizeOpen5eMonster(m) {
+    if (!m) return null;
+
+    // Speed can be a string or object in some datasets; normalize to string
+    let speed = m.speed;
+    if (speed && typeof speed === "object") {
+      speed = Object.entries(speed).map(([k,v]) => {
+        if (v == null || v === "") return "";
+        return k === "walk" ? `${v} ft.` : `${k} ${v} ft.`;
+      }).filter(Boolean).join(", ");
+    }
+    speed = String(speed || "").replace(/\s+/g, " ").trim();
+
+    const hp = toInt(m.hit_points ?? m.hp ?? 0, 0);
+    const hitDice = String(m.hit_dice || m.hitDice || "").trim();
+
+    const acRaw = m.armor_class ?? m.ac ?? "";
+    const ac = toInt((typeof acRaw === "string" ? (acRaw.match(/\d+/)?.[0] || "") : acRaw), 0);
+    const acText = typeof acRaw === "string" && acRaw.replace(/\d+/g,"").trim() ? String(acRaw).trim() : "";
+
+    const name = String(m.name || "").trim();
+    const size = String(m.size || "").trim();
+    const type = String(m.type || "").trim();
+    const alignment = String(m.alignment || "").trim();
+    const sizeType = [size, type].filter(Boolean).join(" ");
+
+    // Abilities
+    const str = toInt(m.strength, 10);
+    const dex = toInt(m.dexterity, 10);
+    const con = toInt(m.constitution, 10);
+    const intel = toInt(m.intelligence, 10);
+    const wis = toInt(m.wisdom, 10);
+    const cha = toInt(m.charisma, 10);
+
+    // Saves/skills/meta are often stored as comma-separated strings in Open5e
+    const splitCsv = (v) => String(v || "").split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+
+    const saves = splitCsv(m.saving_throws || m.saves);
+    const skills = splitCsv(m.skills);
+
+    const vulnerabilities = splitCsv(m.damage_vulnerabilities);
+    const resistances = splitCsv(m.damage_resistances);
+    const immunities = splitCsv(m.damage_immunities);
+    const conditionImmunities = splitCsv(m.condition_immunities);
+
+    const senses = String(m.senses || "").replace(/\s+/g, " ").trim();
+    const languages = String(m.languages || "").replace(/\s+/g, " ").trim();
+
+    const cr = String(m.challenge_rating ?? m.cr ?? "").trim();
+    const pb = m.proficiency_bonus != null ? String(m.proficiency_bonus).trim() : "";
+
+    // Sections: Open5e uses arrays of objects with "name"/"desc" (or "desc" strings)
+    const mapFeatureArray = (arr) => (Array.isArray(arr) ? arr.map(x => ({
+      name: String(x?.name || "").trim(),
+      text: String(x?.desc || x?.text || "").trim()
+    })).filter(x => x.name || x.text) : []);
+
+    const traits = mapFeatureArray(m.special_abilities);
+    const actions = mapFeatureArray(m.actions);
+    const bonusActions = mapFeatureArray(m.bonus_actions);
+    const reactions = mapFeatureArray(m.reactions);
+    const legendaryActions = mapFeatureArray(m.legendary_actions);
+
+    // Some datasets provide "legendary_desc"
+    if (m.legendary_desc && !legendaryActions.length) {
+      legendaryActions.push({ name: "Legendary Actions", text: String(m.legendary_desc).trim() });
+    }
+
+    const out = {
+      name,
+      sizeType,
+      alignment,
+      ac: ac || 10,
+      acText,
+      initiative: "", // Open5e doesn't reliably provide; keep blank
+      hp: hp || "",
+      hpFormula: hitDice ? hitDice : "",
+      speed,
+      str, dex, con, int: intel, wis, cha,
+      saves,
+      skills,
+      vulnerabilities,
+      resistances,
+      immunities,
+      conditionImmunities,
+      senses,
+      languages,
+      cr,
+      pb,
+      traits,
+      actions,
+      bonusActions,
+      reactions,
+      legendaryActions,
+      unmappedText: "",
+      _source: "open5e",
+      _open5e: {
+        slug: m.slug || "",
+        document: m.document__slug || m.document__title || "",
+        url: m.url || "",
+      }
+    };
+
+    return out;
+  }
+
+  async function open5eFetchPage(url) {
+    const res = await fetch(url, { method: "GET" });
+    if (!res.ok) throw new Error(`Open5e request failed (${res.status})`);
+    return await res.json();
+  }
+
+  async function open5eSearchMonsters(queryOrUrl) {
+    const url = queryOrUrl && /^https?:\/\//i.test(queryOrUrl)
+      ? queryOrUrl
+      : `${OPEN5E_BASE}/monsters/?search=${encodeURIComponent(String(queryOrUrl || "").trim())}`;
+    return await open5eFetchPage(url);
+  }
+
+function loadDrafts() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       const arr = raw ? JSON.parse(raw) : [];
@@ -780,6 +908,114 @@
     if (!state.parsed) return null;
     const q = (id) => panelEl.querySelector(`#${id}`);
 
+
+    // Tabs
+    q("sbi-tab-ocr")?.addEventListener("click", () => {
+      state.activeTab = "ocr";
+      render({ labelEl, panelEl });
+    });
+    q("sbi-tab-open5e")?.addEventListener("click", () => {
+      state.activeTab = "open5e";
+      render({ labelEl, panelEl });
+    });
+
+    // Open5e search
+    const runOpen5eSearch = async (qstrOrUrl) => {
+      try {
+        state.open5e.loading = true;
+        state.open5e.error = "";
+        render({ labelEl, panelEl });
+
+        const data = await open5eSearchMonsters(qstrOrUrl);
+        state.open5e.results = Array.isArray(data?.results) ? data.results : [];
+        state.open5e.next = data?.next || null;
+        state.open5e.prev = data?.previous || null;
+        state.open5e.loading = false;
+
+        // Auto-select first result if nothing selected
+        if (!state.open5e.selected && state.open5e.results.length) {
+          state.open5e.selected = state.open5e.results[0];
+        }
+      } catch (err) {
+        state.open5e.loading = false;
+        state.open5e.error = err?.message || String(err);
+      }
+      render({ labelEl, panelEl });
+    };
+
+    q("sbi-open5e-q")?.addEventListener("input", (e) => {
+      const v = e.target.value || "";
+      state.open5e.q = v;
+      // Debounce live search if user stops typing
+      if (_open5eSearchTimer) clearTimeout(_open5eSearchTimer);
+      _open5eSearchTimer = setTimeout(() => {
+        if (state.activeTab === "open5e" && String(state.open5e.q || "").trim().length >= 2) {
+          runOpen5eSearch(state.open5e.q);
+        } else {
+          render({ labelEl, panelEl });
+        }
+      }, 350);
+    });
+
+    q("sbi-open5e-search")?.addEventListener("click", () => {
+      const v = q("sbi-open5e-q")?.value || state.open5e.q || "";
+      state.open5e.q = v;
+      if (String(v).trim()) runOpen5eSearch(v);
+    });
+
+    q("sbi-open5e-clear")?.addEventListener("click", () => {
+      state.open5e.q = "";
+      state.open5e.results = [];
+      state.open5e.next = null;
+      state.open5e.prev = null;
+      state.open5e.loading = false;
+      state.open5e.error = "";
+      state.open5e.selected = null;
+      render({ labelEl, panelEl });
+    });
+
+    q("sbi-open5e-prev")?.addEventListener("click", () => {
+      if (state.open5e.prev) runOpen5eSearch(state.open5e.prev);
+    });
+    q("sbi-open5e-next")?.addEventListener("click", () => {
+      if (state.open5e.next) runOpen5eSearch(state.open5e.next);
+    });
+
+    // Open5e result selection
+    panelEl.querySelectorAll("[data-o5-idx]")?.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-o5-idx"));
+        const pick = state.open5e.results?.[idx];
+        if (pick) {
+          state.open5e.selected = pick;
+          render({ labelEl, panelEl });
+        }
+      });
+    });
+
+    // Load selected Open5e monster into importer editor (OCR tab) so you can tweak fields
+    q("sbi-open5e-use")?.addEventListener("click", () => {
+      const picked = state.open5e.selected;
+      if (!picked) return;
+      const normalized = normalizeOpen5eMonster(picked);
+      state.parsed = normalized;
+      state.ocrText = "";
+      state.status = "done";
+      state.activeTab = "ocr";
+      state.lastInputMethod = "Open5e";
+      render({ labelEl, panelEl });
+    });
+
+    q("sbi-open5e-save")?.addEventListener("click", () => {
+      const picked = state.open5e.selected;
+      if (!picked) return;
+      const normalized = normalizeOpen5eMonster(picked);
+      addDraft({ ...normalized, _savedAt: new Date().toISOString() });
+      alert("Saved Open5e monster to Stat Block Importer drafts.");
+      render({ labelEl, panelEl });
+    });
+
+
     const rawTraits = q("sbi-raw-traits")?.value || "";
     const rawActions = q("sbi-raw-actions")?.value || "";
     const rawBonus = q("sbi-raw-bonus")?.value || "";
@@ -1054,6 +1290,20 @@ function template() {
     const p = state.parsed;
     const progressPct = Math.round((state.progress || 0) * 100);
 
+    const o5 = state.open5e || { q:"", results:[], next:null, prev:null, loading:false, error:"", selected:null };
+    const o5ResultsHtml = (o5.results || []).map((m, idx) => {
+      const cr = m.challenge_rating ?? m.cr ?? "";
+      const type = [m.size, m.type].filter(Boolean).join(" ");
+      const doc = m.document__slug || m.document__title || "";
+      return `<button type="button" class="sbi-o5-item" data-o5-idx="${idx}">
+        <div class="sbi-o5-name">${esc(m.name || "(Unnamed)")}</div>
+        <div class="sbi-o5-sub">${esc([type, m.alignment].filter(Boolean).join(" • "))}</div>
+        <div class="sbi-o5-meta">${cr !== "" ? `CR ${esc(String(cr))}` : ""}${doc ? ` • ${esc(String(doc))}` : ""}</div>
+      </button>`;
+    }).join("");
+
+    const o5Selected = o5.selected ? normalizeOpen5eMonster(o5.selected) : null;
+
     const statusLine =
       state.status === "loading-lib" ? `<div class="sbi-status">Loading OCR library…</div>` :
       state.status === "ocr" ? `<div class="sbi-status">OCR in progress <span class="sbi-pill">${progressPct}%</span></div>` :
@@ -1102,6 +1352,27 @@ function template() {
         .sbi-details[open] summary:after{content:"▴";}
         .sbi-hoverWrap{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
         .sbi-hoverWrap .sbi-muted{font-size:12px;}
+        .sbi-tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+        .sbi-tab{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);cursor:pointer;font-weight:700;font-size:13px;}
+        .sbi-tab:hover{background:rgba(255,255,255,.09);}
+        .sbi-tab.active{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25);}
+        .sbi-open5eGrid{display:grid;gap:12px;grid-template-columns: 1fr 1.2fr;}
+        @media (max-width: 920px){.sbi-open5eGrid{grid-template-columns:1fr;}}
+        .sbi-o5-list{display:flex;flex-direction:column;gap:8px;max-height:64vh;overflow:auto;padding-right:4px;}
+        .sbi-o5-item{text-align:left;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);cursor:pointer;}
+        .sbi-o5-item:hover{background:rgba(255,255,255,.08);}
+        .sbi-o5-name{font-weight:800;font-size:14px;line-height:1.1;}
+        .sbi-o5-sub{opacity:.78;font-size:12px;margin-top:2px;}
+        .sbi-o5-meta{opacity:.65;font-size:12px;margin-top:6px;}
+        .sbi-o5-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+        .sbi-input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.25);color:#fff;outline:none;}
+        .sbi-input:focus{border-color:rgba(255,255,255,.28);}
+        .sbi-btn{padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;cursor:pointer;font-weight:800;}
+        .sbi-btn:hover{background:rgba(255,255,255,.12);}
+        .sbi-btn.primary{background:rgba(120,180,255,.18);border-color:rgba(120,180,255,.32);}
+        .sbi-btn.primary:hover{background:rgba(120,180,255,.24);}
+        .sbi-btn.danger{background:rgba(255,120,120,.15);border-color:rgba(255,120,120,.28);}
+        .sbi-btn.danger:hover{background:rgba(255,120,120,.22);}
         /* Hover preview container */
         #sbi-hover-preview{background:#121212;border:1px solid rgba(255,255,255,.25);border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.6);padding:12px;}
       </style>
@@ -1117,7 +1388,52 @@ function template() {
 
         ${statusLine}
 
-        <div class="sbi-split">
+        <div class="sbi-tabs">
+          <button id="sbi-tab-ocr" type="button" class="sbi-tab ${state.activeTab==="ocr"?"active":""}">Screenshot / OCR</button>
+          <button id="sbi-tab-open5e" type="button" class="sbi-tab ${state.activeTab==="open5e"?"active":""}">Open5e Search</button>
+        </div>
+
+        <div class="sbi-card" style="display:${state.activeTab==="open5e"?"block":"none"};">
+          <div class="sbi-o5-toolbar">
+            <input id="sbi-open5e-q" class="sbi-input" placeholder="Search Open5e monsters (e.g., aboleth, dragon, goblin)" value="${esc(o5.q || "")}" />
+            <button id="sbi-open5e-search" class="sbi-btn primary" type="button">${o5.loading ? "Searching…" : "Search"}</button>
+            <button id="sbi-open5e-clear" class="sbi-btn danger" type="button">Clear</button>
+          </div>
+          ${o5.error ? `<div class="sbi-status sbi-status--error" style="margin-top:10px;">${esc(o5.error)}</div>` : ""}
+        </div>
+
+        <div class="sbi-open5eGrid" style="display:${state.activeTab==="open5e"?"grid":"none"};">
+          <div class="sbi-card">
+            <div style="font-weight:900;margin-bottom:8px;">Results</div>
+            <div class="sbi-o5-list">
+              ${o5.loading && !o5ResultsHtml ? `<div class="sbi-muted">Searching…</div>` : ""}
+              ${o5ResultsHtml || `<div class="sbi-muted">Type a name and search.</div>`}
+            </div>
+            <div class="sbi-btnbar" style="margin-top:10px;">
+              <button id="sbi-open5e-prev" class="sbi-btn" type="button" ${o5.prev ? "" : "disabled"}>Prev</button>
+              <button id="sbi-open5e-next" class="sbi-btn" type="button" ${o5.next ? "" : "disabled"}>Next</button>
+            </div>
+          </div>
+          <div class="sbi-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div style="font-weight:900;">Open5e Stat Block</div>
+              <div class="sbi-btnbar" style="margin:0;">
+                <button id="sbi-open5e-use" class="sbi-btn primary" type="button" ${o5Selected ? "" : "disabled"}>Use in Importer</button>
+                <button id="sbi-open5e-save" class="sbi-btn" type="button" ${o5Selected ? "" : "disabled"}>Save Draft</button>
+              </div>
+            </div>
+            ${o5Selected ? `
+              <div style="margin-top:10px;">
+                <div class="sbi-muted" style="margin-bottom:8px;">Preview uses your standardized site stat block format (same as Vault/Encounter).</div>
+                <div style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;background:rgba(0,0,0,.25);">
+                  ${statBlockPreview(o5Selected)}
+                </div>
+              </div>
+            ` : `<div class="sbi-muted" style="margin-top:10px;">Select a monster from the results to preview it.</div>`}
+          </div>
+        </div>
+
+        <div class="sbi-split" style="display:${state.activeTab==="ocr"?"grid":"none"};">
           <div class="sbi-col">
             <div id="sbi-paste-zone" tabindex="0" class="sbi-card sbi-card--dashed sbi-drop sbi-kbd">
               <strong>Paste Screenshot</strong>
