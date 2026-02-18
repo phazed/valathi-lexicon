@@ -180,15 +180,45 @@
   }
 
   async function open5eFetchPage(url) {
-    const res = await fetch(url, { method: "GET" });
+    // Add a timeout so "Searching..." can't hang forever on network/CORS issues
+    const ctrl = new AbortController();
+    const timeoutMs = 12000;
+    const to = setTimeout(() => ctrl.abort(), timeoutMs);
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        headers: { "Accept": "application/json" },
+        signal: ctrl.signal
+      });
+    } catch (err) {
+      if (err && err.name === "AbortError") {
+        throw new Error("Open5e request timed out. This can happen if the network is blocking the request or CORS fails.");
+      }
+      throw err;
+    } finally {
+      clearTimeout(to);
+    }
+
     if (!res.ok) throw new Error(`Open5e request failed (${res.status})`);
+
+    const ct = (res.headers && res.headers.get) ? (res.headers.get("content-type") || "") : "";
+    // If we didn't get JSON, show a clearer error
+    if (ct && !/application\/json/i.test(ct)) {
+      const txt = await res.text().catch(() => "");
+      throw new Error("Open5e returned a non-JSON response (possible CORS/proxy issue). " + (txt ? ("Preview: " + txt.slice(0, 80)) : ""));
+    }
+
     return await res.json();
   }
 
   async function open5eSearchMonsters(queryOrUrl) {
     const url = queryOrUrl && /^https?:\/\//i.test(queryOrUrl)
       ? queryOrUrl
-      : `${OPEN5E_BASE}/monsters/?search=${encodeURIComponent(String(queryOrUrl || "").trim())}`;
+      : `${OPEN5E_BASE}/monsters/?search=${encodeURIComponent(String(queryOrUrl || "").trim())}&limit=30`;
     return await open5eFetchPage(url);
   }
 
@@ -1610,27 +1640,28 @@ q("sbi-copy")?.addEventListener("click", async () => {
 // Tabs + Open5e bindings (must be in bind(), not collectReviewed)
 // -------------------------
 const runOpen5eSearch = async (qstrOrUrl) => {
-  try {
-    const qv = String(qstrOrUrl || "").trim();
-    if (!qv) return;
-    state.open5e.loading = true;
-    state.open5e.error = "";
-    render({ labelEl, panelEl });
+  const qv = String(qstrOrUrl || "").trim();
+  if (!qv) return;
 
+  state.open5e.loading = true;
+  state.open5e.error = "";
+  render({ labelEl, panelEl });
+
+  try {
     const data = await open5eSearchMonsters(qv);
     state.open5e.results = Array.isArray(data?.results) ? data.results : [];
     state.open5e.next = data?.next || null;
     state.open5e.prev = data?.previous || null;
-    state.open5e.loading = false;
 
     if (!state.open5e.selected || !state.open5e.results.some(r => r?.slug === state.open5e.selected?.slug)) {
       state.open5e.selected = state.open5e.results[0] || null;
     }
   } catch (err) {
-    state.open5e.loading = false;
     state.open5e.error = err?.message || String(err);
+  } finally {
+    state.open5e.loading = false;
+    render({ labelEl, panelEl });
   }
-  render({ labelEl, panelEl });
 };
 
 // Tabs
