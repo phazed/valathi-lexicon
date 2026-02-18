@@ -1208,6 +1208,9 @@
     if (!exists) {
       window.toolsConfig.push({ id: TOOL_ID, name: TOOL_NAME, description: def.description });
     }
+
+    window.toolRenderers = window.toolRenderers || {};
+    window.toolRenderers[TOOL_ID] = def.render;
   }
 
   function injectPanelOverrideCss() {
