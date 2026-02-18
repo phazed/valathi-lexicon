@@ -1018,6 +1018,11 @@
     `;
   }
 
+  // Back-compat alias: some render paths call this name.
+  function renderVaultFeatureList(label, list) {
+    return renderFeatureList(label, list);
+  }
+
   function fmtSigned(n) {
     const v = Number(n);
     if (!Number.isFinite(v)) return "—";
