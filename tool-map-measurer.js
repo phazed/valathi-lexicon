@@ -742,12 +742,26 @@
     }, { passive: false });
 
     // Keyboard shortcuts while tool open
+    
+    function isMapMeasurerEditableTarget(el) {
+      if (!el) return false;
+      const tag = (el.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return true;
+      if (el.isContentEditable) return true;
+      // Some components use a div with role="textbox"
+      try { if (el.getAttribute && el.getAttribute("role") === "textbox") return true; } catch {}
+      return false;
+    }
+
     function onKeyDown(e) {
       if (!panel.isConnected) {
         window.removeEventListener("keydown", onKeyDown);
         window.removeEventListener("keyup", onKeyUp);
         return;
       }
+      // Don't hijack shortcuts while the user is typing in an input/textarea
+      const ae = document.activeElement;
+      if (isMapMeasurerEditableTarget(ae) || isMapMeasurerEditableTarget(e.target)) return;
       if (e.code === "Space") {
         spacePan = true;
         return;
