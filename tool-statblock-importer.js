@@ -3,6 +3,7 @@
   const TOOL_ID = "statblockImporter";
   const TOOL_NAME = "Stat Block Importer";
   const STORAGE_KEY = "vrahuneStatblockImporterDraftsV3";
+  const VAULT_STORAGE_KEY = "vrahuneMonsterVaultStateV2";
   const TESSERACT_CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 
   const state = {
@@ -718,6 +719,109 @@ function loadDrafts() {
   }
 
   // -------------------------
+  // -------------------------
+  // Monster Vault integration
+  // -------------------------
+  function makeId(prefix = "hbm") {
+    return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function parseSignedIntFromText(text, fallback = 0) {
+    const m = String(text || "").match(/[+-]?\d+/);
+    if (!m) return fallback;
+    const n = Number(m[0]);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function toMonsterVaultHomebrewMonster(mon) {
+    const join = (v) => (Array.isArray(v) ? v.filter(Boolean).join(", ") : String(v || "").trim());
+
+    const name = String(mon?.name || "Homebrew Monster").trim() || "Homebrew Monster";
+    const sizeType = [String(mon?.sizeType || "").trim(), String(mon?.alignment || "").trim()].filter(Boolean).join(", ");
+    const speedText = String(mon?.speed || "").trim();
+    const speed = parseSignedIntFromText(speedText, 30);
+    const initiative = parseSignedIntFromText(mon?.initiative, 0);
+
+    const raw = {
+      id: mon?.id || makeId("hbm"),
+      name,
+      type: "Enemy",
+      source: "Homebrew",
+      sizeType,
+      cr: mon?.cr ?? "",
+      xp: toInt(mon?.xp, 0),
+      ac: toInt(mon?.ac, 10),
+      hp: toInt(mon?.hp, 1),
+      speed,
+      speedText: speedText || `${speed} ft.`,
+      initiative,
+      details: {
+        proficiencyBonus: Number.isFinite(Number(mon?.proficiencyBonus)) ? Number(mon.proficiencyBonus) : null,
+        abilityScores: {
+          str: toInt(mon?.str, 10),
+          dex: toInt(mon?.dex, 10),
+          con: toInt(mon?.con, 10),
+          int: toInt(mon?.int, 10),
+          wis: toInt(mon?.wis, 10),
+          cha: toInt(mon?.cha, 10)
+        },
+        savingThrows: join(mon?.saves),
+        skills: join(mon?.skills),
+        damageVulnerabilities: join(mon?.vulnerabilities),
+        damageResistances: join(mon?.resistances),
+        damageImmunities: join(mon?.immunities),
+        conditionImmunities: join(mon?.conditionImmunities),
+        senses: join(mon?.senses),
+        languages: join(mon?.languages),
+        challengeNote: join(mon?.challengeNote),
+        traits: Array.isArray(mon?.traits) ? mon.traits : [],
+        actions: Array.isArray(mon?.actions) ? mon.actions : [],
+        bonusActions: Array.isArray(mon?.bonusActions) ? mon.bonusActions : [],
+        reactions: Array.isArray(mon?.reactions) ? mon.reactions : [],
+        legendaryActions: Array.isArray(mon?.legendaryActions) ? mon.legendaryActions : []
+      }
+    };
+
+    // clean nulls
+    if (raw.details.proficiencyBonus == null) delete raw.details.proficiencyBonus;
+    if (!raw.sizeType) delete raw.sizeType;
+    return raw;
+  }
+
+  function addParsedMonsterToMonsterVault(mon) {
+    const raw = toMonsterVaultHomebrewMonster(mon);
+
+    // Preferred: Monster Vault API (works if MV is loaded on the page)
+    try {
+      if (window.VrahuneMonsterVault && typeof window.VrahuneMonsterVault.addHomebrewMonster === "function") {
+        window.VrahuneMonsterVault.addHomebrewMonster(raw);
+        return { ok: true, message: "Added to Monster Vault (Homebrew)." };
+      }
+    } catch (e) {}
+
+    // Fallback: direct localStorage write (works across tools on the same origin)
+    try {
+      const existing = localStorage.getItem(VAULT_STORAGE_KEY);
+      const state = existing ? JSON.parse(existing) : {};
+      const homebrew = Array.isArray(state.homebrew) ? state.homebrew : [];
+
+      const idx = homebrew.findIndex((m) => String(m?.name || "").toLowerCase() === String(raw.name).toLowerCase());
+      if (idx >= 0) {
+        raw.id = homebrew[idx]?.id || raw.id;
+        homebrew[idx] = { ...homebrew[idx], ...raw, id: raw.id };
+      } else {
+        homebrew.push(raw);
+      }
+
+      state.homebrew = homebrew;
+      localStorage.setItem(VAULT_STORAGE_KEY, JSON.stringify(state));
+      return { ok: true, message: "Saved to Monster Vault storage. Open Monster Vault to view it under Homebrew." };
+    } catch (e) {
+      return { ok: false, message: `Failed to write Monster Vault storage: ${e?.message || e}` };
+    }
+  }
+
+
   // OCR cleanup & section slicing
   // -------------------------
   function normalizeOcr(raw) {
@@ -1895,6 +1999,7 @@ function template() {
               <div class="sbi-btnbar">
                 <button id="sbi-refresh-preview" type="button">Refresh Preview</button>
                 <button id="sbi-save" type="button">Save Draft</button>
+                <button id="sbi-add-to-vault" type="button">Add to Monster Vault</button>
                 <button id="sbi-copy" type="button">Copy JSON</button>
               </div>
               ` : `
@@ -2055,6 +2160,13 @@ function template() {
     previewBtn?.addEventListener("mouseleave", hidePreview);
     previewEl?.addEventListener("mouseenter", showPreview);
     previewEl?.addEventListener("mouseleave", hidePreview);
+
+    q("sbi-add-to-vault")?.addEventListener("click", () => {
+      const reviewed = collectReviewed(panelEl);
+      if (!reviewed) return;
+      const res = addParsedMonsterToMonsterVault(reviewed);
+      alert(res.ok ? res.message : res.message);
+    });
 
 q("sbi-copy")?.addEventListener("click", async () => {
       const reviewed = collectReviewed(panelEl);
