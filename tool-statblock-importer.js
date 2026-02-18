@@ -1054,135 +1054,195 @@ function template() {
     const p = state.parsed;
     const progressPct = Math.round((state.progress || 0) * 100);
 
+    const statusLine =
+      state.status === "loading-lib" ? `<div class="sbi-status">Loading OCR library…</div>` :
+      state.status === "ocr" ? `<div class="sbi-status">OCR in progress <span class="sbi-pill">${progressPct}%</span></div>` :
+      state.status === "error" ? `<div class="sbi-status sbi-status--error">${esc(state.error)}</div>` :
+      "";
+
     return `
-      <div class="tool-panel" style="display:grid;gap:12px;">
-        <div>
-          <h2 style="margin:0 0 6px 0;">Stat Block Importer</h2>
-          <div class="muted">Section-first parser: safer mapping, raw section fallback, manual cleanup workflow.</div>
-        </div>
+      <style>
+        .sbi-root{display:grid;gap:12px;}
+        .sbi-header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+        .sbi-title{margin:0;font-size:20px;letter-spacing:.2px;}
+        .sbi-sub{opacity:.75;font-size:13px;line-height:1.35;}
+        .sbi-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;}
+        .sbi-card--dashed{border-style:dashed;background:rgba(255,255,255,.02);}
+        .sbi-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+        .sbi-col{display:grid;gap:10px;}
+        .sbi-split{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;align-items:start;}
+        @media (max-width: 900px){.sbi-split{grid-template-columns:1fr;}}
+        .sbi-drop{cursor:pointer;outline:none;}
+        .sbi-drop:focus{box-shadow:0 0 0 2px rgba(123,216,143,.25);}
+        .sbi-drop strong{font-size:14px;}
+        .sbi-drop .sbi-hint{opacity:.7;font-size:12px;margin-top:4px;}
+        .sbi-kbd kbd{padding:2px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.25);font-size:12px;}
+        .sbi-status{font-size:13px;opacity:.9;}
+        .sbi-status--error{color:#ff9aa2;}
+        .sbi-pill{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.25);font-size:12px;}
+        .sbi-btnbar{display:flex;gap:8px;flex-wrap:wrap;}
+        .sbi-btnbar button{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;cursor:pointer;}
+        .sbi-btnbar button:hover{background:rgba(255,255,255,.10);}
+        .sbi-btnbar button:disabled{opacity:.45;cursor:not-allowed;}
+        .sbi-btnbar button.sbi-primary{background:rgba(123,216,143,.14);border-color:rgba(123,216,143,.35);}
+        .sbi-btnbar button.sbi-danger{background:rgba(255,154,162,.10);border-color:rgba(255,154,162,.25);}
+        .sbi-form label{display:grid;gap:6px;font-size:12px;opacity:.9;}
+        .sbi-form input,.sbi-form textarea{width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);color:inherit;padding:8px;outline:none;}
+        .sbi-form textarea{min-height:110px;resize:vertical;}
+        .sbi-form input:focus,.sbi-form textarea:focus{box-shadow:0 0 0 2px rgba(123,216,143,.22);border-color:rgba(123,216,143,.35);}
+        .sbi-grid3{display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:10px;}
+        .sbi-grid6{display:grid;grid-template-columns:repeat(6,minmax(80px,1fr));gap:10px;}
+        .sbi-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+        @media (max-width: 900px){.sbi-grid3{grid-template-columns:1fr 1fr;}.sbi-grid6{grid-template-columns:repeat(3,1fr);}.sbi-grid2{grid-template-columns:1fr;}}
+        .sbi-sectionTitle{margin:12px 0 6px 0;font-size:14px;letter-spacing:.2px;}
+        .sbi-muted{opacity:.7;font-size:12px;}
+        .sbi-details summary{cursor:pointer;font-weight:700;opacity:.92;list-style:none;}
+        .sbi-details summary::-webkit-details-marker{display:none;}
+        .sbi-details summary:after{content:"▾";float:right;opacity:.6;}
+        .sbi-details[open] summary:after{content:"▴";}
+        .sbi-hoverWrap{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+        .sbi-hoverWrap .sbi-muted{font-size:12px;}
+        /* Hover preview container */
+        #sbi-hover-preview{background:#121212;border:1px solid rgba(255,255,255,.25);border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,.6);padding:12px;}
+      </style>
 
-        <div id="sbi-paste-zone" tabindex="0" style="padding:14px;border:1px dashed rgba(255,255,255,.30);border-radius:10px;outline:none;">
-          <strong>Paste Screenshot</strong><br>
-          Click here and press <kbd>Ctrl</kbd> + <kbd>V</kbd> (or <kbd>Cmd</kbd> + <kbd>V</kbd>)
-        </div>
-
-        <label style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span>Or Upload File:</span>
-          <input id="sbi-file" type="file" accept="image/*" />
-        </label>
-
-        ${state.lastInputMethod ? `<div class="muted">Loaded via: <strong>${esc(state.lastInputMethod)}</strong></div>` : ""}
-        ${state.status === "loading-lib" ? `<div>Loading OCR library…</div>` : ""}
-        ${state.status === "ocr" ? `<div>OCR in progress: <strong>${progressPct}%</strong></div>` : ""}
-        ${state.status === "error" ? `<div style="color:#ff9aa2;">${esc(state.error)}</div>` : ""}
-
-        ${
-          state.imageDataUrl
-            ? `<img src="${state.imageDataUrl}" alt="Preview" style="max-width:100%;max-height:260px;border:1px solid rgba(255,255,255,.18);border-radius:10px;" />`
-            : `<div style="padding:20px;border:1px dashed rgba(255,255,255,.25);border-radius:10px;">No image loaded yet.</div>`
-        }
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="sbi-run" ${state.imageDataUrl ? "" : "disabled"}>Run OCR + Parse</button>
-          <button id="sbi-clear">Clear</button>
-        </div>
-
-        <details ${state.ocrText ? "open" : ""}>
-          <summary>OCR Text</summary>
-          <textarea id="sbi-ocr-text" style="width:100%;min-height:140px;margin-top:8px;">${esc(state.ocrText || "")}</textarea>
-          <div style="margin-top:8px;">
-            <button id="sbi-reparse">Re-parse Edited Text</button>
+      <div class="sbi-root">
+        <div class="sbi-header">
+          <div>
+            <h2 class="sbi-title">Stat Block Importer</h2>
+            <div class="sbi-sub">Paste a stat block screenshot, run OCR, then quickly correct structured fields. Preview uses the same standardized stat block format you’ll use across the site.</div>
           </div>
-        </details>
+          ${state.lastInputMethod ? `<div class="sbi-pill">Loaded via <strong>${esc(state.lastInputMethod)}</strong></div>` : ""}
+        </div>
 
-        ${
-          p ? `
-            <div style="border-top:1px solid rgba(255,255,255,.14);padding-top:10px;">
-              <details id="sbi-parsed-wrap" style="border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:0 10px;margin-bottom:10px;">
-                <summary style="cursor:pointer;padding:10px 0;font-weight:700;">Parsed Fields</summary>
-                <div style="padding:4px 0 10px 0;">
+        ${statusLine}
 
-              <div style="display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:8px;">
-                <label>Name<input id="sbi-name" style="width:100%;" value="${esc(p.name)}"></label>
-                <label>Size/Type<input id="sbi-sizeType" style="width:100%;" value="${esc(p.sizeType)}"></label>
-                <label>Alignment<input id="sbi-alignment" style="width:100%;" value="${esc(p.alignment)}"></label>
+        <div class="sbi-split">
+          <div class="sbi-col">
+            <div id="sbi-paste-zone" tabindex="0" class="sbi-card sbi-card--dashed sbi-drop sbi-kbd">
+              <strong>Paste Screenshot</strong>
+              <div class="sbi-hint">Click here, then press <kbd>Ctrl</kbd> + <kbd>V</kbd> (or <kbd>Cmd</kbd> + <kbd>V</kbd>)</div>
+            </div>
 
-                <label>AC ${confBadge(p.confidence?.ac)}<input id="sbi-ac" type="number" style="width:100%;" value="${esc(p.ac)}"></label>
-                <label>AC Notes<input id="sbi-acText" style="width:100%;" value="${esc(p.acText || "")}"></label>
-                <label>HP ${confBadge(p.confidence?.hp)}<input id="sbi-hp" type="number" style="width:100%;" value="${esc(p.hp)}"></label>
-                <label>HP Formula<input id="sbi-hpFormula" style="width:100%;" value="${esc(p.hpFormula || "")}"></label>
-                <label>Speed ${confBadge(p.confidence?.speed)}<input id="sbi-speed" style="width:100%;" value="${esc(p.speed || "")}"></label>
+            <div class="sbi-card sbi-row">
+              <span class="sbi-muted">Or upload an image:</span>
+              <input id="sbi-file" type="file" accept="image/*" />
+            </div>
 
-                <label>CR ${confBadge(p.confidence?.cr)}<input id="sbi-cr" style="width:100%;" value="${esc(p.cr)}"></label>
-                <label>XP<input id="sbi-xp" type="number" style="width:100%;" value="${esc(p.xp ?? 0)}"></label>
-                <label>PB ${confBadge(p.confidence?.pb)}<input id="sbi-pb" type="number" style="width:100%;" value="${esc(p.proficiencyBonus ?? 2)}"></label>
+            <div class="sbi-card">
+              ${
+                state.imageDataUrl
+                  ? `<img src="${state.imageDataUrl}" alt="Preview" style="width:100%;max-height:320px;object-fit:contain;border-radius:10px;border:1px solid rgba(255,255,255,.12);" />`
+                  : `<div class="sbi-muted" style="padding:10px;">No image loaded yet.</div>`
+              }
+              <div class="sbi-btnbar" style="margin-top:10px;">
+                <button id="sbi-run" class="sbi-primary" ${state.imageDataUrl ? "" : "disabled"}>Run OCR + Parse</button>
+                <button id="sbi-clear" class="sbi-danger" type="button">Clear</button>
               </div>
+            </div>
 
-              <div style="display:grid;grid-template-columns:repeat(6,minmax(80px,1fr));gap:8px;margin-top:10px;">
-                <label>STR<input id="sbi-str" type="number" style="width:100%;" value="${esc(p.str)}"></label>
-                <label>DEX<input id="sbi-dex" type="number" style="width:100%;" value="${esc(p.dex)}"></label>
-                <label>CON<input id="sbi-con" type="number" style="width:100%;" value="${esc(p.con)}"></label>
-                <label>INT<input id="sbi-int" type="number" style="width:100%;" value="${esc(p.int)}"></label>
-                <label>WIS<input id="sbi-wis" type="number" style="width:100%;" value="${esc(p.wis)}"></label>
-                <label>CHA<input id="sbi-cha" type="number" style="width:100%;" value="${esc(p.cha)}"></label>
+            <details class="sbi-card sbi-details" ${state.ocrText ? "open" : ""}>
+              <summary>OCR Text</summary>
+              <div class="sbi-form" style="margin-top:10px;">
+                <textarea id="sbi-ocr-text">${esc(state.ocrText || "")}</textarea>
               </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-                <label>Saving Throws<input id="sbi-saves" style="width:100%;" value="${esc(listToLine(p.saves))}"></label>
-                <label>Skills<input id="sbi-skills" style="width:100%;" value="${esc(listToLine(p.skills))}"></label>
-                <label>Damage Vulnerabilities<input id="sbi-vuln" style="width:100%;" value="${esc(listToLine(p.vulnerabilities))}"></label>
-                <label>Damage Resistances<input id="sbi-resist" style="width:100%;" value="${esc(listToLine(p.resistances))}"></label>
-                <label>Damage Immunities<input id="sbi-immune" style="width:100%;" value="${esc(listToLine(p.immunities))}"></label>
-                <label>Condition Immunities<input id="sbi-condImm" style="width:100%;" value="${esc(listToLine(p.conditionImmunities))}"></label>
-                <label>Senses<input id="sbi-senses" style="width:100%;" value="${esc(listToLine(p.senses))}"></label>
-                <label>Languages<input id="sbi-languages" style="width:100%;" value="${esc(listToLine(p.languages))}"></label>
-                <label style="grid-column:1 / -1;">Habitats / Environment<input id="sbi-habitats" style="width:100%;" value="${esc(listToLine(p.habitats))}"></label>
+              <div class="sbi-btnbar" style="margin-top:10px;">
+                <button id="sbi-reparse" type="button">Re-parse Edited Text</button>
               </div>
+            </details>
+          </div>
 
-              <h4 style="margin:12px 0 6px 0;">Structured Entries</h4>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <label>Traits (Name. text)<textarea id="sbi-traits" style="width:100%;min-height:110px;">${esc(entriesToText(p.traits))}</textarea></label>
-                <label>Actions (Name. text)<textarea id="sbi-actions" style="width:100%;min-height:110px;">${esc(entriesToText(p.actions))}</textarea></label>
-                <label>Bonus Actions<textarea id="sbi-bonusActions" style="width:100%;min-height:90px;">${esc(entriesToText(p.bonusActions))}</textarea></label>
-                <label>Reactions<textarea id="sbi-reactions" style="width:100%;min-height:90px;">${esc(entriesToText(p.reactions))}</textarea></label>
-                <label style="grid-column:1 / -1;">Legendary Actions<textarea id="sbi-legendaryActions" style="width:100%;min-height:90px;">${esc(entriesToText(p.legendaryActions))}</textarea></label>
-              </div>
+          <div class="sbi-col">
+            ${
+              p ? `
+              <details id="sbi-parsed-wrap" class="sbi-card sbi-details" open>
+                <summary>Parsed Fields</summary>
 
-              <h4 style="margin:12px 0 6px 0;">Raw Section Editors</h4>
-              <div class="muted" style="margin-bottom:6px;">Use these when OCR structure fails. Then copy cleaned lines to structured boxes above.</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <label>Raw Traits<textarea id="sbi-raw-traits" style="width:100%;min-height:90px;">${esc(p.rawSections?.traits || "")}</textarea></label>
-                <label>Raw Actions<textarea id="sbi-raw-actions" style="width:100%;min-height:90px;">${esc(p.rawSections?.actions || p.rawSections?.actionsRawFallback || "")}</textarea></label>
-                <label>Raw Bonus Actions<textarea id="sbi-raw-bonus" style="width:100%;min-height:80px;">${esc(p.rawSections?.bonusActions || "")}</textarea></label>
-                <label>Raw Reactions<textarea id="sbi-raw-reactions" style="width:100%;min-height:80px;">${esc(p.rawSections?.reactions || "")}</textarea></label>
-                <label style="grid-column:1 / -1;">Raw Legendary Actions<textarea id="sbi-raw-legendary" style="width:100%;min-height:80px;">${esc(p.rawSections?.legendaryActions || "")}</textarea></label>
-              </div>
+                <div class="sbi-form" style="margin-top:10px;">
+                  <div class="sbi-grid3">
+                    <label>Name<input id="sbi-name" value="${esc(p.name)}"></label>
+                    <label>Size/Type<input id="sbi-sizeType" value="${esc(p.sizeType)}"></label>
+                    <label>Alignment<input id="sbi-alignment" value="${esc(p.alignment)}"></label>
 
-              <label style="display:block;margin-top:10px;">Unmapped Text<textarea id="sbi-unmapped" style="width:100%;min-height:90px;">${esc(p.unmappedText || "")}</textarea></label>
+                    <label>AC ${confBadge(p.confidence?.ac)}<input id="sbi-ac" type="number" value="${esc(p.ac)}"></label>
+                    <label>AC Notes<input id="sbi-acText" value="${esc(p.acText || "")}"></label>
+                    <label>HP ${confBadge(p.confidence?.hp)}<input id="sbi-hp" type="number" value="${esc(p.hp)}"></label>
+                    <label>HP Formula<input id="sbi-hpFormula" value="${esc(p.hpFormula || "")}"></label>
+                    <label>Speed ${confBadge(p.confidence?.speed)}<input id="sbi-speed" value="${esc(p.speed || "")}"></label>
 
-              </div>
+                    <label>CR ${confBadge(p.confidence?.cr)}<input id="sbi-cr" value="${esc(p.cr)}"></label>
+                    <label>XP<input id="sbi-xp" type="number" value="${esc(p.xp ?? 0)}"></label>
+                    <label>PB ${confBadge(p.confidence?.pb)}<input id="sbi-pb" type="number" value="${esc(p.proficiencyBonus ?? 2)}"></label>
+                  </div>
 
+                  <div class="sbi-grid6" style="margin-top:10px;">
+                    <label>STR<input id="sbi-str" type="number" value="${esc(p.str)}"></label>
+                    <label>DEX<input id="sbi-dex" type="number" value="${esc(p.dex)}"></label>
+                    <label>CON<input id="sbi-con" type="number" value="${esc(p.con)}"></label>
+                    <label>INT<input id="sbi-int" type="number" value="${esc(p.int)}"></label>
+                    <label>WIS<input id="sbi-wis" type="number" value="${esc(p.wis)}"></label>
+                    <label>CHA<input id="sbi-cha" type="number" value="${esc(p.cha)}"></label>
+                  </div>
+
+                  <div class="sbi-grid2" style="margin-top:10px;">
+                    <label>Saving Throws<input id="sbi-saves" value="${esc(listToLine(p.saves))}"></label>
+                    <label>Skills<input id="sbi-skills" value="${esc(listToLine(p.skills))}"></label>
+                    <label>Damage Vulnerabilities<input id="sbi-vuln" value="${esc(listToLine(p.vulnerabilities))}"></label>
+                    <label>Damage Resistances<input id="sbi-resist" value="${esc(listToLine(p.resistances))}"></label>
+                    <label>Damage Immunities<input id="sbi-immune" value="${esc(listToLine(p.immunities))}"></label>
+                    <label>Condition Immunities<input id="sbi-condImm" value="${esc(listToLine(p.conditionImmunities))}"></label>
+                    <label>Senses<input id="sbi-senses" value="${esc(listToLine(p.senses))}"></label>
+                    <label>Languages<input id="sbi-languages" value="${esc(listToLine(p.languages))}"></label>
+                    <label style="grid-column:1 / -1;">Habitats / Environment<input id="sbi-habitats" value="${esc(listToLine(p.habitats))}"></label>
+                  </div>
+
+                  <div class="sbi-sectionTitle">Structured Entries</div>
+                  <div class="sbi-grid2">
+                    <label>Traits (Name. text)<textarea id="sbi-traits">${esc(entriesToText(p.traits))}</textarea></label>
+                    <label>Actions (Name. text)<textarea id="sbi-actions">${esc(entriesToText(p.actions))}</textarea></label>
+                    <label>Bonus Actions<textarea id="sbi-bonusActions" style="min-height:90px;">${esc(entriesToText(p.bonusActions))}</textarea></label>
+                    <label>Reactions<textarea id="sbi-reactions" style="min-height:90px;">${esc(entriesToText(p.reactions))}</textarea></label>
+                    <label style="grid-column:1 / -1;">Legendary Actions<textarea id="sbi-legendaryActions" style="min-height:90px;">${esc(entriesToText(p.legendaryActions))}</textarea></label>
+                  </div>
+
+                  <div class="sbi-sectionTitle">Raw Section Editors</div>
+                  <div class="sbi-muted" style="margin-bottom:8px;">Use these when OCR structure fails. Then copy cleaned lines to structured boxes above.</div>
+                  <div class="sbi-grid2">
+                    <label>Raw Traits<textarea id="sbi-raw-traits" style="min-height:90px;">${esc(p.rawSections?.traits || "")}</textarea></label>
+                    <label>Raw Actions<textarea id="sbi-raw-actions" style="min-height:90px;">${esc(p.rawSections?.actions || p.rawSections?.actionsRawFallback || "")}</textarea></label>
+                    <label>Raw Bonus Actions<textarea id="sbi-raw-bonus" style="min-height:80px;">${esc(p.rawSections?.bonusActions || "")}</textarea></label>
+                    <label>Raw Reactions<textarea id="sbi-raw-reactions" style="min-height:80px;">${esc(p.rawSections?.reactions || "")}</textarea></label>
+                    <label style="grid-column:1 / -1;">Raw Legendary Actions<textarea id="sbi-raw-legendary" style="min-height:80px;">${esc(p.rawSections?.legendaryActions || "")}</textarea></label>
+                  </div>
+
+                  <label style="margin-top:10px;">Unmapped Text<textarea id="sbi-unmapped" style="min-height:90px;">${esc(p.unmappedText || "")}</textarea></label>
+                </div>
               </details>
 
-              <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <button id="sbi-preview-hover-btn" type="button">Stat Block Preview (Hover)</button>
-                                <span class="muted">Hover button to preview standardized card.</span>
+              <div class="sbi-card">
+                <div class="sbi-hoverWrap">
+                  <button id="sbi-preview-hover-btn" type="button">Stat Block Preview (Hover)</button>
+                  <span class="sbi-muted">Hover to preview the standardized stat block card.</span>
+                </div>
               </div>
 
-              <div id="sbi-hover-preview" style="display:none;position:fixed;z-index:99999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(980px,94vw);max-height:90vh;overflow:auto;background:#121212;border:1px solid rgba(255,255,255,.25);border-radius:12px;box-shadow:0 30px 90px rgba(0,0,0,.6);padding:12px;">
+              <div id="sbi-hover-preview" style="display:none;position:fixed;z-index:99999;left:50%;top:50%;transform:translate(-50%,-50%);width:min(980px,94vw);max-height:90vh;overflow:auto;">
                 ${statBlockPreview(p)}
               </div>
 
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-                <button id="sbi-refresh-preview">Refresh Preview</button>
-                <button id="sbi-save">Save Draft</button>
-                <button id="sbi-copy">Copy JSON</button>
+              <div class="sbi-btnbar">
+                <button id="sbi-refresh-preview" type="button">Refresh Preview</button>
+                <button id="sbi-save" type="button">Save Draft</button>
+                <button id="sbi-copy" type="button">Copy JSON</button>
               </div>
-            </div>
-          ` : `<div class="muted">No parsed result yet.</div>`
-        }
-
-        
+              ` : `
+              <div class="sbi-card">
+                <div class="sbi-muted">No parsed result yet. Paste/upload an image and run OCR + Parse.</div>
+              </div>
+              `
+            }
+          </div>
+        </div>
       </div>
     `;
   }
