@@ -13,8 +13,8 @@
     progress: 0,
     error: "",
     lastInputMethod: "",
-    activeTab: "ocr", // ocr | open5e
-    open5e: { q: "", doc: "", documents: [], results: [], next: null, prev: null, loading: false, error: "", selected: null },
+    activeTab: "ocr", // ocr | import
+    importer: { fmt: "open5e", jsonText: "", items: [], selected: null, error: "" },
   };
 
   // -------------------------
@@ -86,10 +86,10 @@
         slug: d?.slug || d?.key || d?.document || "",
         title: d?.title || d?.name || d?.slug || d?.key || ""
       })).filter(d => d.slug);
-      state.open5e.documents = mapped;
+      state.importer.documents = mapped;
     } catch {
       // fallback common docs if endpoint fails
-      state.open5e.documents = [
+      state.importer.documents = [
         { slug: "srd-2024", title: "SRD 2024" },
         { slug: "srd-2014", title: "SRD 2014" },
         { slug: "5esrd", title: "5e SRD (legacy)" },
@@ -204,6 +204,131 @@
 
     return out;
   }
+
+// ---------------------
+// Import adapters
+// ---------------------
+function normalize5eToolsMonster(m) {
+  if (!m) return null;
+  const name = m.name || m.n || "";
+  const size = (m.size || m.sz || "").toString();
+  const type = (m.type?.type || m.type || m.t || "").toString();
+  const alignment = (Array.isArray(m.alignment) ? m.alignment.join(" ") : (m.alignment || m.al || "")).toString();
+
+  let ac = 0, acText = "";
+  const acr = m.ac ?? m.armor_class ?? m.armorClass;
+  if (Array.isArray(acr) && acr.length) {
+    const first = acr[0];
+    if (typeof first === "number") ac = first;
+    else if (typeof first === "string") { ac = toInt(first.match(/\d+/)?.[0] || 0, 0); acText = first; }
+    else if (typeof first === "object") { ac = toInt(first.ac ?? first.value ?? 0, 0); acText = (first.from ? (Array.isArray(first.from) ? first.from.join(", ") : String(first.from)) : "") || ""; }
+  } else if (typeof acr === "number") ac = acr;
+  else if (typeof acr === "string") { ac = toInt(acr.match(/\d+/)?.[0] || 0, 0); acText = acr; }
+  else if (acr && typeof acr === "object") { ac = toInt(acr.ac ?? acr.value ?? 0, 0); }
+
+  const hpObj = m.hp || m.hit_points || m.hitPoints;
+  let hp = 0, hpFormula = "";
+  if (typeof hpObj === "number") hp = hpObj;
+  else if (typeof hpObj === "string") { hp = toInt(hpObj.match(/\d+/)?.[0] || 0, 0); hpFormula = hpObj; }
+  else if (hpObj && typeof hpObj === "object") { hp = toInt(hpObj.average ?? hpObj.avg ?? 0, 0); hpFormula = hpObj.formula || hpObj.dice || ""; }
+
+  let speed = m.speed;
+  if (speed && typeof speed === "object") {
+    speed = Object.entries(speed).map(([k,v]) => {
+      if (v == null || v === "") return "";
+      return k === "walk" ? `${v} ft.` : `${k} ${v} ft.`;
+    }).filter(Boolean).join(", ");
+  }
+  speed = String(speed || "").trim();
+
+  const str = toInt(m.str ?? m.strength ?? 10, 10);
+  const dex = toInt(m.dex ?? m.dexterity ?? 10, 10);
+  const con = toInt(m.con ?? m.constitution ?? 10, 10);
+  const intel = toInt(m.int ?? m.intelligence ?? 10, 10);
+  const wis = toInt(m.wis ?? m.wisdom ?? 10, 10);
+  const cha = toInt(m.cha ?? m.charisma ?? 10, 10);
+
+  let saves = [];
+  const sv = m.save || m.saves || m.saving_throws;
+  if (sv && typeof sv === "object" && !Array.isArray(sv)) {
+    saves = Object.entries(sv).map(([k,v]) => `${k.toUpperCase()} ${String(v).startsWith("+")||String(v).startsWith("-")?v:`+${v}`}`);
+  } else if (Array.isArray(sv)) {
+    saves = sv.map(String);
+  } else if (typeof sv === "string") {
+    saves = sv.split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
+  }
+
+  function flattenEntries(ent) {
+    if (ent == null) return "";
+    if (typeof ent === "string") return ent;
+    if (Array.isArray(ent)) return ent.map(flattenEntries).join("\n");
+    if (typeof ent === "object") {
+      if (ent.entries) return flattenEntries(ent.entries);
+      if (ent.entry) return flattenEntries(ent.entry);
+      if (ent.items) return ent.items.map(flattenEntries).join("\n");
+      return JSON.stringify(ent);
+    }
+    return String(ent);
+  }
+  function entriesToPlainText(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(e => {
+      if (typeof e === "string") return { name: "", text: e };
+      if (e?.name && e?.entries) return { name: e.name, text: flattenEntries(e.entries) };
+      if (e?.name && e?.entry) return { name: e.name, text: flattenEntries(e.entry) };
+      return { name: e?.name || "", text: flattenEntries(e?.entries || e?.entry || "") };
+    }).filter(x => x.name || x.text);
+  }
+
+  const traits = entriesToPlainText(m.trait || m.traits || m.special_abilities);
+  const actions = entriesToPlainText(m.action || m.actions);
+  const bonusActions = entriesToPlainText(m.bonus || m.bonusActions || m.bonus_actions);
+  const reactions = entriesToPlainText(m.reaction || m.reactions);
+  const legendaryActions = entriesToPlainText(m.legendary || m.legendaryActions || m.legendary_actions);
+
+  const senses = String(m.senses || "").trim();
+  const languages = String(m.languages || "").trim();
+  const cr = String(m.cr ?? m.challenge_rating ?? "").trim();
+  const pb = String(m.pb ?? m.proficiency_bonus ?? "").trim();
+
+  return {
+    name,
+    sizeType: [size, type].filter(Boolean).join(" ").trim() || type || "",
+    alignment,
+    ac: ac || 10,
+    acText,
+    initiative: "",
+    hp,
+    hpFormula,
+    speed,
+    str, dex, con, int: intel, wis, cha,
+    saves,
+    skills: typeof m.skill === "string" ? m.skill.split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : (Array.isArray(m.skills)?m.skills:[]),
+    vulnerabilities: [],
+    resistances: [],
+    immunities: [],
+    conditionImmunities: [],
+    senses,
+    languages,
+    cr,
+    pb,
+    traits,
+    actions,
+    bonusActions,
+    reactions,
+    legendaryActions,
+    source: "Imported JSON",
+    sourceType: "custom",
+  };
+}
+
+function toCanonicalMonster(obj, fmt) {
+  if (!obj) return null;
+  const f = String(fmt || state.importer.fmt || "open5e");
+  if (f === "open5e") return normalizeOpen5eMonster(obj);
+  if (f === "5etools") return normalize5eToolsMonster(obj);
+  return obj;
+}
 
   async function open5eFetchPage(url) {
     // Add a timeout so "Searching..." can't hang forever on network/CORS issues
@@ -1030,7 +1155,118 @@ function loadDrafts() {
   // -------------------------
   // Preview renderer (Monster Vault style)
   // -------------------------
-  function renderMvFeatureList(label, list) {
+  
+function statBlockPreviewFiveEtoolsLike(mon) {
+  if (!mon) return `<div class="sbi-muted">No monster selected.</div>`;
+  const m = mon;
+
+  const mod = (score) => {
+    const v = Number(score);
+    const sc = Number.isFinite(v) ? v : 10;
+    return Math.floor((sc - 10) / 2);
+  };
+  const fmt = (n) => (n >= 0 ? `+${n}` : `${n}`);
+
+  const saveVal = (abbr, score) => {
+    const key = (abbr || "").toLowerCase() + "Save";
+    if (m[key] !== undefined && m[key] !== null && m[key] !== "") return fmt(Number(m[key]));
+    return fmt(mod(score));
+  };
+
+  const abilities = [
+    ["STR", m.str, saveVal("str", m.str)],
+    ["DEX", m.dex, saveVal("dex", m.dex)],
+    ["CON", m.con, saveVal("con", m.con)],
+    ["INT", m.int, saveVal("int", m.int)],
+    ["WIS", m.wis, saveVal("wis", m.wis)],
+    ["CHA", m.cha, saveVal("cha", m.cha)],
+  ].map(([k, score, save]) => {
+    const sc = Number(score) || 10;
+    const md = fmt(mod(sc));
+    return `
+      <div class="sb5-abil">
+        <div class="sb5-abil-k">${k}</div>
+        <div class="sb5-abil-v">${sc} <span class="sb5-abil-mod">(${md})</span></div>
+        <div class="sb5-abil-s">Save ${save}</div>
+      </div>`;
+  }).join("");
+
+  const row = (label, value) => value ? `<div class="sb5-row"><span class="sb5-lbl">${esc(label)}</span> <span class="sb5-val">${esc(value)}</span></div>` : "";
+  const metaRow = (label, arr) => (arr && arr.length) ? row(label, Array.isArray(arr) ? arr.join(", ") : String(arr)) : "";
+
+  const section = (title, entries) => {
+    const list = (entries || []).filter(e => (e?.name || e?.text));
+    if (!list.length) return "";
+    const body = list.map(e => {
+      const nm = e.name ? `<span class="sb5-entry-n">${esc(e.name)}.</span> ` : "";
+      return `<div class="sb5-entry">${nm}<span class="sb5-entry-t">${esc(e.text || "")}</span></div>`;
+    }).join("");
+    return `<div class="sb5-sec"><div class="sb5-sec-h">${esc(title)}</div>${body}</div>`;
+  };
+
+  const headerLine = [m.sizeType || "", m.alignment || ""].filter(Boolean).join(" • ");
+
+  return `
+    <style>
+      .sb5-wrap{border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(0,0,0,.22);padding:12px;}
+      .sb5-name{font-weight:950;letter-spacing:.2px;font-size:22px;line-height:1.05;margin-bottom:2px;}
+      .sb5-sub{color:rgba(255,255,255,.75);font-size:12px;margin-bottom:10px;}
+      .sb5-core{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+      .sb5-chip{border:1px solid rgba(255,255,255,.16);background:rgba(120,180,255,.10);padding:6px 10px;border-radius:999px;font-size:12px;}
+      .sb5-chip b{font-weight:900;}
+      .sb5-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:10px 0;}
+      @media (max-width: 760px){.sb5-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+      .sb5-abil{border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.18);border-radius:12px;padding:8px;text-align:center;}
+      .sb5-abil-k{font-weight:900;font-size:11px;letter-spacing:.8px;color:rgba(255,255,255,.72);}
+      .sb5-abil-v{font-weight:950;font-size:15px;margin-top:2px;}
+      .sb5-abil-mod{font-weight:800;color:rgba(255,255,255,.78);}
+      .sb5-abil-s{margin-top:4px;font-size:11px;color:rgba(255,255,255,.70);}
+      .sb5-rows{display:grid;grid-template-columns:1fr;gap:4px;margin-top:6px;}
+      .sb5-row{font-size:13px;line-height:1.25;}
+      .sb5-lbl{font-weight:900;color:rgba(255,255,255,.82);}
+      .sb5-sec{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12);}
+      .sb5-sec-h{font-weight:950;letter-spacing:.8px;color:rgba(255,255,255,.82);font-size:12px;margin-bottom:8px;text-transform:uppercase;}
+      .sb5-entry{font-size:13px;line-height:1.25;margin-bottom:6px;}
+      .sb5-entry-n{font-weight:950;}
+      .sb5-entry-t{color:rgba(255,255,255,.88);}
+    </style>
+
+    <div class="sb5-wrap">
+      <div class="sb5-name">${esc(m.name || "Unknown")}</div>
+      <div class="sb5-sub">${esc(headerLine)}</div>
+
+      <div class="sb5-core">
+        <div class="sb5-chip"><b>AC</b> ${esc(m.ac ?? "")}${m.acText ? ` <span style="opacity:.75">(${esc(m.acText)})</span>` : ""}</div>
+        <div class="sb5-chip"><b>HP</b> ${esc(m.hp ?? "")}${m.hpFormula ? ` <span style="opacity:.75">(${esc(m.hpFormula)})</span>` : ""}</div>
+        ${m.speed ? `<div class="sb5-chip"><b>Speed</b> ${esc(m.speed)}</div>` : ""}
+        ${m.initiative ? `<div class="sb5-chip"><b>Init</b> ${esc(m.initiative)}</div>` : ""}
+        ${m.cr ? `<div class="sb5-chip"><b>CR</b> ${esc(m.cr)}</div>` : ""}
+        ${m.pb ? `<div class="sb5-chip"><b>PB</b> ${esc(m.pb)}</div>` : ""}
+      </div>
+
+      <div class="sb5-grid">${abilities}</div>
+
+      <div class="sb5-rows">
+        ${metaRow("Saving Throws:", m.saves)}
+        ${metaRow("Skills:", m.skills)}
+        ${row("Senses:", m.senses)}
+        ${row("Languages:", m.languages)}
+        ${metaRow("Damage Vulnerabilities:", m.vulnerabilities)}
+        ${metaRow("Damage Resistances:", m.resistances)}
+        ${metaRow("Damage Immunities:", m.immunities)}
+        ${metaRow("Condition Immunities:", m.conditionImmunities)}
+      </div>
+
+      ${section("Traits", m.traits)}
+      ${section("Actions", m.actions)}
+      ${section("Bonus Actions", m.bonusActions)}
+      ${section("Reactions", m.reactions)}
+      ${section("Legendary Actions", m.legendaryActions)}
+    </div>
+  `;
+}
+
+function renderMvFeatureList(label, list) {
     const arr = Array.isArray(list) ? list : [];
     if (!arr.length) return "";
     return `
@@ -1393,7 +1629,7 @@ function template() {
     const p = state.parsed;
     const progressPct = Math.round((state.progress || 0) * 100);
 
-    const o5 = state.open5e || { q:"", results:[], next:null, prev:null, loading:false, error:"", selected:null };
+    const o5 = state.importer || { q:"", results:[], next:null, prev:null, loading:false, error:"", selected:null };
     const o5ResultsHtml = (o5.results || []).map((m, idx) => {
       const cr = m.challenge_rating ?? m.cr ?? "";
       const type = [m.size, m.type].filter(Boolean).join(" ");
@@ -1493,54 +1729,82 @@ function template() {
 
         <div class="sbi-tabs">
           <button id="sbi-tab-ocr" type="button" class="sbi-tab ${state.activeTab==="ocr"?"active":""}">Screenshot / OCR</button>
-          <button id="sbi-tab-open5e" type="button" class="sbi-tab ${state.activeTab==="open5e"?"active":""}">Open5e Search</button>
+          <button id="sbi-tab-import" type="button" class="sbi-tab ${state.activeTab==="import"?"active":""}">Import</button>
         </div>
 
-        <div class="sbi-card" style="display:${state.activeTab==="open5e"?"block":"none"};">
-          <div class="sbi-o5-toolbar">
-            <input id="sbi-open5e-q" class="sbi-input" placeholder="Search Open5e monsters (e.g., aboleth, dragon, goblin)" value="${esc(o5.q || "")}" />
-            <select id="sbi-open5e-doc" class="sbi-input" title="Filter by source">
-              <option value="">All sources</option>
-              ${ (o5.documents||[]).map(d=>`<option value="${esc(d.slug)}" ${String(o5.doc||"")===String(d.slug)?"selected":""}>${esc(d.title||d.slug)}</option>`).join("") }
-            </select>
-            <button id="sbi-open5e-search" class="sbi-btn primary" type="button">${o5.loading ? "Searching…" : "Search"}</button>
-            <button id="sbi-open5e-clear" class="sbi-btn danger" type="button">Clear</button>
-          </div>
-          ${o5.error ? `<div class="sbi-status sbi-status--error" style="margin-top:10px;">${esc(o5.error)}</div>` : ""}
-        </div>
+        
+<div class="sbi-card" style="display:${state.activeTab==="import"?"block":"none"};">
+  <div style="display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:220px;">
+      <div class="sbi-muted" style="margin-bottom:6px;">Format</div>
+      <select id="sbi-import-format" class="sbi-input">
+        <option value="open5e" ${String(state.importer.fmt||"open5e")==="open5e"?"selected":""}>Open5e monster JSON</option>
+        <option value="5etools" ${String(state.importer.fmt||"open5e")==="5etools"?"selected":""}>5etools-style monster JSON</option>
+        <option value="vrahune" ${String(state.importer.fmt||"open5e")==="vrahune"?"selected":""}>Vrahune/Vault monster JSON (your schema)</option>
+      </select>
+    </div>
+    <div class="sbi-btnbar" style="margin:0;">
+      <button id="sbi-import-load" class="sbi-btn primary" type="button">Load JSON</button>
+      <button id="sbi-import-clear" class="sbi-btn danger" type="button">Clear</button>
+    </div>
+  </div>
 
-        <div class="sbi-open5eGrid" style="display:${state.activeTab==="open5e"?"grid":"none"};">
-          <div class="sbi-card">
-            <div style="font-weight:900;margin-bottom:8px;">Results</div>
-            <div class="sbi-o5-list">
-              ${o5.loading && !o5ResultsHtml ? `<div class="sbi-muted">Searching…</div>` : ""}
-              ${o5ResultsHtml || `<div class="sbi-muted">Type a name and search.</div>`}
-            </div>
-            <div class="sbi-btnbar" style="margin-top:10px;">
-              <button id="sbi-open5e-prev" class="sbi-btn" type="button" ${o5.prev ? "" : "disabled"}>Prev</button>
-              <button id="sbi-open5e-next" class="sbi-btn" type="button" ${o5.next ? "" : "disabled"}>Next</button>
-            </div>
-          </div>
-          <div class="sbi-card">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-              <div style="font-weight:900;">Open5e Stat Block</div>
-              <div class="sbi-btnbar" style="margin:0;">
-                <button id="sbi-open5e-use" class="sbi-btn primary" type="button" ${o5Selected ? "" : "disabled"}>Use in Importer</button>
-                <button id="sbi-open5e-save" class="sbi-btn" type="button" ${o5Selected ? "" : "disabled"}>Save Draft</button>
-              </div>
-            </div>
-            ${o5Selected ? `
-              <div style="margin-top:10px;">
-                <div class="sbi-muted" style="margin-bottom:8px;">Preview uses your standardized site stat block format (same as Vault/Encounter).</div>
-                <div style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;background:rgba(0,0,0,.25);">
-                  ${statBlockPreviewOpen5eStyle(normalizeOpen5eMonster(o5Selected))}
-                </div>
-              </div>
-            ` : `<div class="sbi-muted" style="margin-top:10px;">Select a monster from the results to preview it.</div>`}
-          </div>
-        </div>
+  <div class="sbi-row" style="margin-top:10px;align-items:flex-start;">
+    <div style="flex:1;min-width:260px;">
+      <div class="sbi-muted" style="margin-bottom:6px;">Paste JSON</div>
+      <textarea id="sbi-import-json" class="sbi-input" style="height:140px;resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;" placeholder='Paste monster JSON here (single object, an array, or an API payload with "results").'>${esc(state.importer.jsonText || "")}</textarea>
+      <div class="sbi-hint" style="margin-top:6px;">Everything stays in your browser. This tool does not upload files anywhere.</div>
+    </div>
+    <div style="width:260px;min-width:220px;">
+      <div class="sbi-muted" style="margin-bottom:6px;">Or upload a JSON file</div>
+      <input id="sbi-import-file" type="file" accept="application/json,.json" />
+      <div class="sbi-hint" style="margin-top:8px;">Tip: export your own homebrew entries and re-import them here.</div>
+    </div>
+  </div>
 
-        <div class="sbi-split" style="display:${state.activeTab==="ocr"?"grid":"none"};">
+  ${state.importer.error ? `<div class="sbi-status sbi-status--error" style="margin-top:10px;">${esc(state.importer.error)}</div>` : ""}
+</div>
+
+<div class="sbi-open5eGrid" style="display:${state.activeTab==="import"?"grid":"none"};">
+  <div class="sbi-card">
+    <div style="font-weight:900;margin-bottom:8px;">Imported Monsters</div>
+    <div class="sbi-o5-list" id="sbi-import-list">
+      ${(state.importer.items && state.importer.items.length)
+        ? state.importer.items.slice(0, 200).map((it, idx) => {
+            const sel = state.importer.selected === idx;
+            const name = it?.name || it?.monster_name || it?.title || `Monster ${idx+1}`;
+            const sub = (it?.sizeType || it?.type || it?.size || "").toString();
+            return `<button type="button" data-imp-idx="${idx}" class="sbi-o5-item ${sel?"sel":""}">
+              <div style="font-weight:800;">${esc(name)}</div>
+              <div class="sbi-muted" style="font-size:12px;">${esc(sub)}</div>
+            </button>`;
+          }).join("")
+        : `<div class="sbi-muted">Paste or upload JSON, then click <strong>Load JSON</strong>.</div>`
+      }
+    </div>
+  </div>
+
+  <div class="sbi-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div style="font-weight:900;">Stat Block Preview</div>
+      <div class="sbi-btnbar" style="margin:0;">
+        <button id="sbi-import-use" class="sbi-btn primary" type="button" ${Number.isFinite(state.importer.selected) ? "" : "disabled"}>Use in Importer</button>
+        <button id="sbi-import-save" class="sbi-btn" type="button" ${Number.isFinite(state.importer.selected) ? "" : "disabled"}>Save Draft</button>
+      </div>
+    </div>
+
+    ${Number.isFinite(state.importer.selected) && state.importer.items?.[state.importer.selected] ? `
+      <div style="margin-top:10px;">
+        <div class="sbi-muted" style="margin-bottom:8px;">Preview uses a 5etools-like compact layout, re-skinned to your theme colors.</div>
+        <div style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;background:rgba(0,0,0,.18);">
+          ${statBlockPreviewFiveEtoolsLike(toCanonicalMonster(state.importer.items[state.importer.selected], state.importer.fmt))}
+        </div>
+      </div>
+    ` : `<div class="sbi-muted" style="margin-top:10px;">Select an imported monster to preview it.</div>`}
+  </div>
+</div>
+
+<div class="sbi-split" style="display:${state.activeTab==="ocr"?"grid":"none"};">
           <div class="sbi-col">
             <div id="sbi-paste-zone" tabindex="0" class="sbi-card sbi-card--dashed sbi-drop sbi-kbd">
               <strong>Paste Screenshot</strong>
@@ -1674,8 +1938,8 @@ function template() {
   // Bind events
   // -------------------------
   function bind(labelEl, panelEl) {
-    if (!state.open5e._docsLoaded) {
-      state.open5e._docsLoaded = true;
+    if (!state.importer._docsLoaded) {
+      state.importer._docsLoaded = true;
       open5eFetchDocuments().then(() => {
         // only re-render if open5e tab visible or filter select exists
         if (panelEl && panelEl.querySelector("#sbi-open5e-doc")) render({ labelEl, panelEl });
@@ -1829,128 +2093,98 @@ q("sbi-copy")?.addEventListener("click", async () => {
     });
 
 // -------------------------
-// Tabs + Open5e bindings (must be in bind(), not collectReviewed)
-// -------------------------
-const runOpen5eSearch = async (qstrOrUrl) => {
-  const qv = String(qstrOrUrl || "").trim();
-  if (!qv) return;
-
-  state.open5e.loading = true;
-  state.open5e.error = "";
-  render({ labelEl, panelEl });
-
-  try {
-    const data = await open5eSearchMonsters(qv);
-    state.open5e.results = Array.isArray(data?.results) ? data.results : [];
-    state.open5e.next = data?.next || null;
-    state.open5e.prev = data?.previous || null;
-
-    if (!state.open5e.selected || !state.open5e.results.some(r => r?.slug === state.open5e.selected?.slug)) {
-      state.open5e.selected = state.open5e.results[0] || null;
-    }
-  } catch (err) {
-    state.open5e.error = err?.message || String(err);
-  } finally {
-    state.open5e.loading = false;
-    render({ labelEl, panelEl });
-  }
-};
 
 // Tabs
 q("sbi-tab-ocr")?.addEventListener("click", () => {
   state.activeTab = "ocr";
   render({ labelEl, panelEl });
 });
-q("sbi-tab-open5e")?.addEventListener("click", () => {
-  state.activeTab = "open5e";
-  // optional auto-search if query already typed
-  if (String(state.open5e.q || "").trim().length >= 2 && !state.open5e.results.length) {
-    runOpen5eSearch(state.open5e.q);
-  } else {
-    render({ labelEl, panelEl });
-  }
-});
-
-q("sbi-open5e-doc")?.addEventListener("change", (e) => {
-  state.open5e.doc = e.target.value || "";
-  // re-run current query if present
-  if (state.activeTab === "open5e" && String(state.open5e.q||"").trim().length >= 2) {
-    runOpen5eSearch(state.open5e.q);
-  } else {
-    render({ labelEl, panelEl });
-  }
-});
-
-// Open5e query input (debounced)
-q("sbi-open5e-q")?.addEventListener("input", (e) => {
-  const v = e.target.value || "";
-  state.open5e.q = v;
-  if (_open5eSearchTimer) clearTimeout(_open5eSearchTimer);
-  _open5eSearchTimer = setTimeout(() => {
-    if (state.activeTab === "open5e" && String(state.open5e.q || "").trim().length >= 2) {
-      runOpen5eSearch(state.open5e.q);
-    } else {
-      render({ labelEl, panelEl });
-    }
-  }, 350);
-});
-
-q("sbi-open5e-search")?.addEventListener("click", () => {
-  const v = q("sbi-open5e-q")?.value || state.open5e.q || "";
-  state.open5e.q = v;
-  if (String(v).trim()) runOpen5eSearch(v);
-});
-
-q("sbi-open5e-clear")?.addEventListener("click", () => {
-  state.open5e.q = "";
-  state.open5e.results = [];
-  state.open5e.next = null;
-  state.open5e.prev = null;
-  state.open5e.loading = false;
-  state.open5e.error = "";
-  state.open5e.selected = null;
+q("sbi-tab-import")?.addEventListener("click", () => {
+  state.activeTab = "import";
   render({ labelEl, panelEl });
 });
 
-q("sbi-open5e-prev")?.addEventListener("click", () => {
-  if (state.open5e.prev) runOpen5eSearch(state.open5e.prev);
-});
-q("sbi-open5e-next")?.addEventListener("click", () => {
-  if (state.open5e.next) runOpen5eSearch(state.open5e.next);
+// Import: file -> textarea
+q("sbi-import-file")?.addEventListener("change", async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    const txt = await f.text();
+    state.importer.jsonText = txt;
+    const ta = q("sbi-import-json");
+    if (ta) ta.value = txt;
+  } catch (err) {
+    state.importer.error = err?.message || String(err);
+  }
+  render({ labelEl, panelEl });
 });
 
-// Result selection (event delegation, survives re-render)
-panelEl.querySelectorAll("[data-o5-idx]")?.forEach((btn) => {
+q("sbi-import-format")?.addEventListener("change", (e) => {
+  state.importer.fmt = e.target.value || "open5e";
+});
+
+q("sbi-import-clear")?.addEventListener("click", () => {
+  state.importer.jsonText = "";
+  state.importer.items = [];
+  state.importer.selected = null;
+  state.importer.error = "";
+  const ta = q("sbi-import-json");
+  if (ta) ta.value = "";
+  const fi = q("sbi-import-file");
+  if (fi) fi.value = "";
+  render({ labelEl, panelEl });
+});
+
+q("sbi-import-load")?.addEventListener("click", () => {
+  const ta = q("sbi-import-json");
+  const raw = (ta ? ta.value : state.importer.jsonText) || "";
+  state.importer.jsonText = raw;
+  state.importer.error = "";
+  state.importer.items = [];
+  state.importer.selected = null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const arr = Array.isArray(parsed) ? parsed : (parsed?.results && Array.isArray(parsed.results) ? parsed.results : [parsed]);
+    state.importer.items = arr.filter(Boolean);
+    state.importer.selected = state.importer.items.length ? 0 : null;
+    if (!state.importer.items.length) state.importer.error = "No monsters found in that JSON.";
+  } catch (err) {
+    state.importer.error = "Invalid JSON: " + (err?.message || String(err));
+  }
+  render({ labelEl, panelEl });
+});
+
+// Imported list selection
+panelEl.querySelectorAll("[data-imp-idx]")?.forEach((btn) => {
   btn.addEventListener("click", () => {
-    const idx = Number(btn.getAttribute("data-o5-idx"));
-    const pick = state.open5e.results?.[idx];
-    if (pick) {
-      state.open5e.selected = pick;
-      render({ labelEl, panelEl });
-    }
+    const idx = Number(btn.getAttribute("data-imp-idx"));
+    if (!Number.isFinite(idx)) return;
+    state.importer.selected = idx;
+    render({ labelEl, panelEl });
   });
 });
 
-// Use selected (loads into OCR tab editor)
-q("sbi-open5e-use")?.addEventListener("click", () => {
-  const picked = state.open5e.selected;
+q("sbi-import-use")?.addEventListener("click", () => {
+  if (!Number.isFinite(state.importer.selected)) return;
+  const picked = state.importer.items?.[state.importer.selected];
   if (!picked) return;
-  const normalized = normalizeOpen5eMonster(picked);
+  const normalized = toCanonicalMonster(picked, state.importer.fmt);
   state.parsed = normalized;
   state.ocrText = "";
   state.status = "done";
   state.activeTab = "ocr";
-  state.lastInputMethod = "Open5e";
+  state.lastInputMethod = "Import";
   render({ labelEl, panelEl });
 });
 
-// Save selected to drafts
-q("sbi-open5e-save")?.addEventListener("click", () => {
-  const picked = state.open5e.selected;
+q("sbi-import-save")?.addEventListener("click", () => {
+  if (!Number.isFinite(state.importer.selected)) return;
+  const picked = state.importer.items?.[state.importer.selected];
   if (!picked) return;
-  const normalized = normalizeOpen5eMonster(picked);
+  const normalized = toCanonicalMonster(picked, state.importer.fmt);
   addDraft({ ...normalized, _savedAt: new Date().toISOString() });
-  alert("Saved Open5e monster to Stat Block Importer drafts.");
+  alert("Saved imported monster to Stat Block Importer drafts.");
   render({ labelEl, panelEl });
 });
 
