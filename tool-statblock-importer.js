@@ -65,11 +65,18 @@
     // |16 (+3)|14 (+2)|...|
     const lines = t.split("\n");
     const out = [];
+    // Many exported statblocks wrap everything in blockquotes (`>`). Strip that for table detection,
+    // but keep the original line for later processing.
+    const stripBQ = (s) => String(s || "").replace(/^\s*>+\s?/, "").trim();
     const isAbilityHeader = (ln) => {
-      const norm = String(ln || "").trim().replace(/\s+/g, "").replace(/^\|/, "").replace(/\|$/, "").toUpperCase();
+      const norm = stripBQ(ln)
+        .replace(/\s+/g, "")
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .toUpperCase();
       return norm === "STR|DEX|CON|INT|WIS|CHA" || norm.includes("STR|DEX|CON|INT|WIS|CHA");
     };
-    const isAlignRow = (ln) => /\|\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(String(ln||"").trim());
+    const isAlignRow = (ln) => /\|\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(stripBQ(ln));
 
     for (let i = 0; i < lines.length; i++) {
       const ln = lines[i];
@@ -77,8 +84,7 @@
         let j = i + 1;
         if (j < lines.length && isAlignRow(lines[j])) j++;
         if (j < lines.length) {
-          const vals = String(lines[j] || "")
-            .trim()
+          const vals = stripBQ(lines[j] || "")
             .replace(/^\|/, "")
             .replace(/\|$/, "")
             .split("|")
