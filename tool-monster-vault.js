@@ -2017,22 +2017,37 @@
     }
   }
 
-  function init() {
-    if (typeof window.registerTool === "function") {
-      window.registerTool({
-        id: TOOL_ID,
-        name: TOOL_NAME,
-        description: "SRD monsters + homebrew vault for encounter prep.",
-        render: renderMonsterVaultTool
-      });
-    }
 
-    publishApi();
+  function _mvRegisterTool() {
+    const def = {
+      id: TOOL_ID,
+      name: TOOL_NAME,
+      description: "SRD monsters + homebrew vault for encounter prep.",
+      render: renderMonsterVaultTool
+    };
+
+    // Prefer the app's registrar when present
+    if (typeof window.registerTool === "function") {
+      window.registerTool(def);
+    } else {
+      // Fallback: register ourselves so we still appear even if this script loads before app.js
+      window.toolsConfig = window.toolsConfig || [];
+      window.toolRenderers = window.toolRenderers || {};
+
+      const base = { id: def.id, name: def.name, description: def.description || "" };
+      const idx = window.toolsConfig.findIndex((t) => t && t.id === def.id);
+      if (idx >= 0) window.toolsConfig[idx] = base;
+      else window.toolsConfig.push(base);
+
+      window.toolRenderers[def.id] = def.render;
+    }
 
     if (typeof window.renderToolsNav === "function") {
       window.renderToolsNav();
     }
+  }
 
+  function _mvWrapRenderToolPanelIfPossible() {
     const prevRender = window.renderToolPanel;
     if (typeof prevRender === "function" && !prevRender.__monsterVaultWrapped) {
       const wrappedRender = function (toolId) {
@@ -2044,6 +2059,39 @@
       };
       wrappedRender.__monsterVaultWrapped = true;
       window.renderToolPanel = wrappedRender;
+    }
+  }
+
+  function init() {
+    // Register immediately (works even if app.js hasn't loaded yet)
+    _mvRegisterTool();
+
+    // Always publish API for other tools
+    publishApi();
+
+    // Wrap renderToolPanel if/when it exists
+    _mvWrapRenderToolPanelIfPossible();
+
+    // If this tool loaded before app.js, the app's registerTool/renderToolsNav/renderToolPanel
+    // won't exist yet. Keep retrying briefly so the tool shows up once app is ready.
+    if (typeof window.registerTool !== "function" || typeof window.renderToolPanel !== "function") {
+      let attempts = 0;
+      const MAX_ATTEMPTS = 200; // ~10s at 50ms
+      const t = setInterval(() => {
+        attempts++;
+        _mvRegisterTool();
+        _mvWrapRenderToolPanelIfPossible();
+
+        if (
+          typeof window.registerTool === "function" &&
+          typeof window.renderToolsNav === "function" &&
+          typeof window.renderToolPanel === "function"
+        ) {
+          clearInterval(t);
+        } else if (attempts >= MAX_ATTEMPTS) {
+          clearInterval(t);
+        }
+      }, 50);
     }
   }
 
