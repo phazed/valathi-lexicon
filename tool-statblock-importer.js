@@ -218,7 +218,7 @@
   async function open5eSearchMonsters(queryOrUrl) {
     const url = queryOrUrl && /^https?:\/\//i.test(queryOrUrl)
       ? queryOrUrl
-      : `${OPEN5E_BASE}/monsters/?search=${encodeURIComponent(String(queryOrUrl || "").trim())}&limit=30`;
+      : `${OPEN5E_BASE}/monsters/?search=${encodeURIComponent(String(queryOrUrl || "").trim())}&limit=50`;
     return await open5eFetchPage(url);
   }
 
@@ -1161,7 +1161,35 @@ function statBlockPreview5etools(m) {
           .sb5e-sections .sec{margin-top:8px}
           .sb5e-sections .sec-h{font:700 12px/1.2 Arial,sans-serif;letter-spacing:.08em;color:#5b3e16;border-top:2px solid #7a5a2d;padding-top:6px;margin-bottom:4px;text-transform:uppercase}
           .sb5e-sections p{margin:0 0 6px 0}
-        </style>
+        
+          /* Open5e-style preview */
+          .o5-wrap{background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px;color:rgba(255,255,255,.92);}
+          .o5-head{border-bottom:1px solid rgba(255,255,255,.10);padding-bottom:10px;margin-bottom:10px;}
+          .o5-name{font-weight:950;font-size:18px;letter-spacing:.2px;}
+          .o5-meta{opacity:.8;margin-top:3px;font-size:12px;}
+          .o5-line{display:flex;gap:10px;justify-content:space-between;padding:4px 0;border-bottom:1px dashed rgba(255,255,255,.08);}
+          .o5-line:last-child{border-bottom:none;}
+          .o5-lab{opacity:.75;font-weight:800;}
+          .o5-val{font-weight:700;text-align:right;flex:1;}
+          .o5-core{display:grid;grid-template-columns:1fr;gap:0;margin-bottom:10px;}
+          .o5-abilgrid{margin:12px 0;padding:10px;border:1px solid rgba(255,255,255,.10);border-radius:12px;background:rgba(0,0,0,.22);}
+          .o5-abil-legend{display:grid;grid-template-columns:56px 1fr 1fr 1fr;gap:8px;font-size:11px;opacity:.7;margin-bottom:6px;}
+          .o5-abil-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+          .o5-abil{border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:8px;background:rgba(0,0,0,.18);text-align:center;}
+          .o5-abil-h{font-weight:900;font-size:11px;opacity:.8;}
+          .o5-abil-s{font-weight:950;font-size:14px;margin-top:2px;}
+          .o5-abil-m,.o5-abil-save{font-size:11px;opacity:.85;margin-top:2px;}
+          .o5-details{margin-top:10px;}
+          .o5-sec{margin-top:12px;border-top:1px solid rgba(255,255,255,.10);padding-top:10px;}
+          .o5-sec-h{font-weight:950;letter-spacing:.8px;font-size:12px;text-transform:uppercase;opacity:.85;margin-bottom:6px;}
+          .o5-entry{margin:6px 0;line-height:1.35;}
+          .o5-entry-n{font-weight:900;}
+          .o5-entry-d{opacity:.92;}
+          @media (max-width: 900px){
+            .o5-abil-row{grid-template-columns:repeat(3,1fr);}
+          }
+
+</style>
         <div class="sb5e-head">
           <div class="sb5e-name">${esc(m.name||"Unnamed Monster")}</div>
           <div class="sb5e-sub">${esc([m.sizeType,m.alignment].filter(Boolean).join(", "))}</div>
@@ -1206,6 +1234,116 @@ function statBlockPreview5etools(m) {
 
   function statBlockPreview(m) {
     return statBlockPreview2024(m);
+  }
+
+  // Open5e-style stat block preview (compact, label-forward like open5e.com)
+  function statBlockPreviewOpen5eStyle(mon) {
+    const m = mon || {};
+    const name = esc(m.name || "Unknown");
+    const meta = [m.size, m.type, m.alignment].filter(Boolean).join(" • ");
+    const acLine = m.ac ? `${m.ac}${m.acText ? ` (${esc(m.acText)})` : ""}` : "";
+    const hpLine = m.hp ? `${m.hp}${m.hpFormula ? ` (${esc(m.hpFormula)})` : ""}` : "";
+    const initLine = (m.initiative != null && m.initiative !== "") ? `${m.initiative}` : "";
+    const crLine = m.cr ? `${esc(String(m.cr))}${m.xp ? ` (${esc(String(m.xp))} XP)` : ""}` : "";
+    const pbLine = m.pb ? `${esc(String(m.pb))}` : "";
+
+    const speedLine = esc(m.speed || "");
+
+    const abilities = [
+      ["STR", m.str, m.strMod, m.strSave],
+      ["DEX", m.dex, m.dexMod, m.dexSave],
+      ["CON", m.con, m.conMod, m.conSave],
+      ["INT", m.int, m.intMod, m.intSave],
+      ["WIS", m.wis, m.wisMod, m.wisSave],
+      ["CHA", m.cha, m.chaMod, m.chaSave],
+    ];
+
+    const abilityCells = abilities.map(([lab, score, mod, save]) => {
+      const s = (score != null && score !== "") ? Number(score) : null;
+      const mm = (mod != null && mod !== "") ? Number(mod) : (s != null ? Math.floor((s - 10) / 2) : null);
+      const sv = (save != null && save !== "") ? Number(save) : mm;
+      const modStr = (mm == null || Number.isNaN(mm)) ? "" : (mm >= 0 ? `+${mm}` : `${mm}`);
+      const saveStr = (sv == null || Number.isNaN(sv)) ? "" : (sv >= 0 ? `+${sv}` : `${sv}`);
+      return `
+        <div class="o5-abil">
+          <div class="o5-abil-h">${esc(lab)}</div>
+          <div class="o5-abil-s">${s == null ? "—" : s}</div>
+          <div class="o5-abil-m">${modStr || "—"}</div>
+          <div class="o5-abil-save">${saveStr || "—"}</div>
+        </div>`;
+    }).join("");
+
+    const line = (label, value) => value ? `<div class="o5-line"><span class="o5-lab">${label}</span><span class="o5-val">${value}</span></div>` : "";
+
+    const joinList = (arr) => Array.isArray(arr) ? arr.filter(Boolean).join(", ") : (arr ? String(arr) : "");
+
+    const savesLine = joinList(m.saves);
+    const skillsLine = joinList(m.skills);
+    const vulnLine = joinList(m.vulnerabilities);
+    const resLine = joinList(m.resistances);
+    const immLine = joinList(m.immunities);
+    const cimmLine = joinList(m.conditionImmunities);
+    const sensesLine = m.senses ? esc(String(m.senses)) : "";
+    const langsLine = m.languages ? esc(String(m.languages)) : "";
+
+    const section = (title, list) => {
+      const arr = Array.isArray(list) ? list : [];
+      if (!arr.length) return "";
+      return `
+        <div class="o5-sec">
+          <div class="o5-sec-h">${esc(title)}</div>
+          ${arr.map(it => {
+            const n = esc(it?.name || "");
+            const d = esc(it?.desc || it?.text || "");
+            return `<div class="o5-entry"><span class="o5-entry-n">${n ? n + "." : ""}</span> <span class="o5-entry-d">${d}</span></div>`;
+          }).join("")}
+        </div>`;
+    };
+
+    return `
+      <div class="o5-wrap">
+        <div class="o5-head">
+          <div class="o5-name">${name}</div>
+          <div class="o5-meta">${esc(meta)}</div>
+        </div>
+
+        <div class="o5-core">
+          ${line("Armor Class", acLine)}
+          ${line("Hit Points", hpLine)}
+          ${line("Speed", speedLine)}
+          ${line("Initiative", esc(initLine))}
+          ${line("Challenge", crLine)}
+          ${line("Proficiency Bonus", pbLine)}
+        </div>
+
+        <div class="o5-abilgrid">
+          <div class="o5-abil-legend">
+            <div class="o5-abil-legend-sp"></div>
+            <div class="o5-abil-legend-s">Score</div>
+            <div class="o5-abil-legend-m">Mod</div>
+            <div class="o5-abil-legend-save">Save</div>
+          </div>
+          <div class="o5-abil-row">${abilityCells}</div>
+        </div>
+
+        <div class="o5-details">
+          ${line("Saving Throws", esc(savesLine))}
+          ${line("Skills", esc(skillsLine))}
+          ${line("Damage Vulnerabilities", esc(vulnLine))}
+          ${line("Damage Resistances", esc(resLine))}
+          ${line("Damage Immunities", esc(immLine))}
+          ${line("Condition Immunities", esc(cimmLine))}
+          ${line("Senses", sensesLine)}
+          ${line("Languages", langsLine)}
+        </div>
+
+        ${section("Traits", m.traits)}
+        ${section("Actions", m.actions)}
+        ${section("Bonus Actions", m.bonusActions)}
+        ${section("Reactions", m.reactions)}
+        ${section("Legendary Actions", m.legendaryActions)}
+      </div>
+    `;
   }
 
 function template() {
@@ -1348,7 +1486,7 @@ function template() {
               <div style="margin-top:10px;">
                 <div class="sbi-muted" style="margin-bottom:8px;">Preview uses your standardized site stat block format (same as Vault/Encounter).</div>
                 <div style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;background:rgba(0,0,0,.25);">
-                  ${statBlockPreview(o5Selected)}
+                  ${statBlockPreviewOpen5eStyle(normalizeOpen5eMonster(o5Selected))}
                 </div>
               </div>
             ` : `<div class="sbi-muted" style="margin-top:10px;">Select a monster from the results to preview it.</div>`}
