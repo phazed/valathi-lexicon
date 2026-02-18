@@ -675,6 +675,77 @@
     return Math.floor((n - 10) / 2);
   }
 
+  function parseSavingThrowMap(input) {
+    const out = {};
+    const parts = Array.isArray(input)
+      ? input
+      : String(input || "")
+          .split(/[,;]+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+    const toKey = (raw) => {
+      const t = String(raw || "").trim().toLowerCase();
+      if (t.startsWith("str") || t.startsWith("strength")) return "str";
+      if (t.startsWith("dex") || t.startsWith("dexterity")) return "dex";
+      if (t.startsWith("con") || t.startsWith("constitution")) return "con";
+      if (t.startsWith("int") || t.startsWith("intelligence")) return "int";
+      if (t.startsWith("wis") || t.startsWith("wisdom")) return "wis";
+      if (t.startsWith("cha") || t.startsWith("charisma")) return "cha";
+      return null;
+    };
+
+    for (const p of parts) {
+      const m = String(p).match(/^(str|dex|con|int|wis|cha|strength|dexterity|constitution|intelligence|wisdom|charisma)\b\s*([+-]\s*\d+)/i);
+      if (!m) continue;
+      const k = toKey(m[1]);
+      if (!k) continue;
+      out[k] = m[2].replace(/\s+/g, "");
+    }
+    return out;
+  }
+
+  function shortSize(sizeType) {
+    const t = String(sizeType || "").trim();
+    if (!t) return "—";
+    const first = t.split(/\s+/)[0];
+    return first || "—";
+  }
+
+  function renderAbilitySaveTable2024(abilityScores, savingThrows) {
+    const a = abilityScores || {};
+    const saveMap = parseSavingThrowMap(savingThrows);
+    const abilList = [
+      ["STR", "str"],
+      ["DEX", "dex"],
+      ["CON", "con"],
+      ["INT", "int"],
+      ["WIS", "wis"],
+      ["CHA", "cha"]
+    ];
+
+    const cells = abilList
+      .map(([abbr, key]) => {
+        const score = Number.isFinite(Number(a[key])) ? Number(a[key]) : 10;
+        const mod = signedInt(abilityMod(score));
+        const save = saveMap[key] != null ? String(saveMap[key]) : mod;
+        return `
+          <td>
+            <div class="mv-abil-abbr">${esc(abbr)}</div>
+            <div class="mv-abil-score">${score} <span class="mv-abil-mod">(${esc(mod)})</span></div>
+            <div class="mv-abil-save">Save ${esc(String(save))}</div>
+          </td>
+        `;
+      })
+      .join("");
+
+    return `
+      <table class="mv-ability-table">
+        <tr>${cells}</tr>
+      </table>
+    `;
+  }
+
   function monsterKeyFromAny(monster) {
     if (!monster || typeof monster !== "object") return "";
     const rawId =
@@ -2100,7 +2171,7 @@
       `;
     }
 
-    function renderMonsterStatBlockContent(c, options = {}) {
+        function renderMonsterStatBlockContent(c, options = {}) {
       const showTitle = options.showTitle !== false;
       const title = toPlainText(options.title || "Stat Block") || "Stat Block";
       const emptyMessage = toPlainText(options.emptyMessage || "No full stat block data is available on this monster record.");
@@ -2160,19 +2231,28 @@
         `;
       }
 
+      const speedText = String(c?.speedText || `${intOr(c?.speed, 30)} ft.`).trim() || `${intOr(c?.speed, 30)} ft.`;
+      const initVal = c?.initiative == null ? "—" : signedInt(c.initiative);
+      const pbVal = d.proficiencyBonus == null ? "—" : signedInt(d.proficiencyBonus);
+      const xpVal = Number(c?.xp || 0).toLocaleString();
+      const crVal = normalizeCR(c?.cr, "1/8");
+      const sizeVal = shortSize(c?.sizeType);
+
       return `
         ${showTitle ? `<div class="monster-detail-title">${esc(title)}</div>` : ""}
         <div class="mv-details">
           <div class="mv-details-grid">
-            <div class="mv-statline"><span>STR</span><b>${intOr(a.str, 10)}</b></div>
-            <div class="mv-statline"><span>DEX</span><b>${intOr(a.dex, 10)}</b></div>
-            <div class="mv-statline"><span>CON</span><b>${intOr(a.con, 10)}</b></div>
-            <div class="mv-statline"><span>INT</span><b>${intOr(a.int, 10)}</b></div>
-            <div class="mv-statline"><span>WIS</span><b>${intOr(a.wis, 10)}</b></div>
-            <div class="mv-statline"><span>CHA</span><b>${intOr(a.cha, 10)}</b></div>
-            <div class="mv-statline"><span>PB</span><b>${d.proficiencyBonus == null ? "—" : signedInt(d.proficiencyBonus)}</b></div>
-            <div class="mv-statline"><span>XP</span><b>${Number(c?.xp || 0).toLocaleString()}</b></div>
+            <div class="mv-statline"><span>AC</span><b>${intOr(c?.ac, 10)}</b></div>
+            <div class="mv-statline"><span>HP</span><b>${intOr(c?.hp, 1)}</b></div>
+            <div class="mv-statline"><span>Speed</span><b>${esc(speedText)}</b></div>
+            <div class="mv-statline"><span>Init</span><b>${esc(initVal)}</b></div>
+            <div class="mv-statline"><span>CR</span><b>${esc(crVal)}</b></div>
+            <div class="mv-statline"><span>XP</span><b>${esc(xpVal)}</b></div>
+            <div class="mv-statline"><span>PB</span><b>${esc(pbVal)}</b></div>
+            <div class="mv-statline"><span>Size</span><b>${esc(sizeVal)}</b></div>
           </div>
+
+          ${renderAbilitySaveTable2024(a, d.savingThrows)}
 
           ${miscRows.length
             ? `<div class="mv-detail-lines">${miscRows
@@ -2195,6 +2275,8 @@
         </div>
       `;
     }
+
+
 
     function renderMonsterStatHoverControl(c, scope = "active", encounterId = null) {
       if (!isVaultImportedMonster(c)) return "";
@@ -3742,6 +3824,49 @@ function renderEditorModal() {
           font-weight: 560;
           white-space: pre-wrap;
           word-break: break-word;
+        }
+
+
+        .mv-ability-table {
+          width: 100%;
+          table-layout: fixed;
+          border-collapse: separate;
+          border-spacing: 6px 6px;
+        }
+
+        .mv-ability-table td {
+          border: 1px solid #2c3950;
+          border-radius: 7px;
+          padding: 6px 6px;
+          text-align: center;
+          vertical-align: top;
+          background: #0a111d;
+        }
+
+        .mv-abil-abbr {
+          font-size: .62rem;
+          color: #94aad6;
+          letter-spacing: .03em;
+          text-transform: uppercase;
+          font-weight: 700;
+        }
+
+        .mv-abil-score {
+          font-size: .78rem;
+          color: #eef4ff;
+          font-weight: 800;
+          margin-top: 1px;
+        }
+
+        .mv-abil-mod {
+          color: #aebfe0;
+          font-weight: 650;
+        }
+
+        .mv-abil-save {
+          font-size: .62rem;
+          color: #8ea2c8;
+          margin-top: 3px;
         }
 
         .mv-detail-section {
