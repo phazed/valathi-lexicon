@@ -47,12 +47,55 @@
       .trim();
   }
   
-  function markdownToPlainText(md) {
+    function markdownToPlainText(md) {
     // Best-effort: remove common Markdown syntax while preserving stat block labels/lines.
+    // Important: we also convert the common 6-ability markdown table into parse-friendly lines:
+    //   STR 16 (+3)
+    //   DEX 14 (+2)
+    //   ...
     let t = String(md || "").replace(/\r/g, "");
 
     // Keep code block contents, remove the fences.
     t = t.replace(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/g, (_m, inner) => inner);
+
+    // Preprocess common ability-score tables before stripping pipes.
+    // Handles e.g.
+    // |STR|DEX|CON|INT|WIS|CHA|
+    // |:---:|:---:|:---:|:---:|:---:|:---:|
+    // |16 (+3)|14 (+2)|...|
+    const lines = t.split("\n");
+    const out = [];
+    const isAbilityHeader = (ln) => {
+      const norm = String(ln || "").trim().replace(/\s+/g, "").replace(/^\|/, "").replace(/\|$/, "").toUpperCase();
+      return norm === "STR|DEX|CON|INT|WIS|CHA" || norm.includes("STR|DEX|CON|INT|WIS|CHA");
+    };
+    const isAlignRow = (ln) => /\|\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(String(ln||"").trim());
+
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      if (isAbilityHeader(ln)) {
+        let j = i + 1;
+        if (j < lines.length && isAlignRow(lines[j])) j++;
+        if (j < lines.length) {
+          const vals = String(lines[j] || "")
+            .trim()
+            .replace(/^\|/, "")
+            .replace(/\|$/, "")
+            .split("|")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (vals.length >= 6 && vals.slice(0, 6).every((v) => /\d{1,2}/.test(v))) {
+            const abbrs = ["STR","DEX","CON","INT","WIS","CHA"];
+            for (let k = 0; k < 6; k++) out.push(`${abbrs[k]} ${vals[k]}`);
+            i = j; // skip the value row (and the alignment row if present)
+            continue;
+          }
+        }
+      }
+      out.push(ln);
+    }
+
+    t = out.join("\n");
 
     // Strip blockquotes/headings
     t = t.replace(/^\s*>+\s?/gm, "");
@@ -71,7 +114,7 @@
     // Horizontal rules / separators
     t = t.replace(/^\s*([-*_]\s*){3,}\s*$/gm, "\n");
 
-    // Simple tables: remove pipes but keep text
+    // Simple tables: remove pipes but keep text for any remaining table rows.
     t = t.replace(/^\s*\|(.+)\|\s*$/gm, (_m, inner) => inner.replace(/\|/g, " "));
 
     // Bullets
@@ -86,8 +129,10 @@ function splitLines(text) {
       .map((l) => l.trim())
       .filter(Boolean);
   }
-  function listToLine(arr) {
-    return (arr || []).join(", ");
+    function listToLine(v) {
+    if (Array.isArray(v)) return v.join(", ");
+    const s = String(v ?? "").trim();
+    return s;
   }
   function entriesToText(entries) {
     return (entries || []).map((e) => `${e.name}. ${e.text}`).join("\n");
@@ -178,8 +223,8 @@ function splitLines(text) {
     const immunities = splitCsv(m.damage_immunities);
     const conditionImmunities = splitCsv(m.condition_immunities);
 
-    const senses = String(m.senses || "").replace(/\s+/g, " ").trim();
-    const languages = String(m.languages || "").replace(/\s+/g, " ").trim();
+    const senses = splitCsv(m.senses);
+    const languages = splitCsv(m.languages);
 
     const cr = String(m.challenge_rating ?? m.cr ?? "").trim();
     const pb = m.proficiency_bonus != null ? String(m.proficiency_bonus).trim() : "";
@@ -285,6 +330,9 @@ function normalizeJsonMonster(m) {
     out.resistances = Array.isArray(out.resistances) ? out.resistances : (out.resistances ? String(out.resistances).split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : []);
     out.immunities = Array.isArray(out.immunities) ? out.immunities : (out.immunities ? String(out.immunities).split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : []);
     out.conditionImmunities = Array.isArray(out.conditionImmunities) ? out.conditionImmunities : (out.conditionImmunities ? String(out.conditionImmunities).split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : []);
+    out.senses = Array.isArray(out.senses) ? out.senses : (out.senses ? String(out.senses).split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : []);
+    out.languages = Array.isArray(out.languages) ? out.languages : (out.languages ? String(out.languages).split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : []);
+    out.habitats = Array.isArray(out.habitats) ? out.habitats : (out.habitats ? String(out.habitats).split(/[,;]+/).map(s=>s.trim()).filter(Boolean) : []);
     out.traits = normalizeLooseEntries(out.traits);
     out.actions = normalizeLooseEntries(out.actions);
     out.bonusActions = normalizeLooseEntries(out.bonusActions);
@@ -397,8 +445,9 @@ function normalizeJsonMonster(m) {
     resistances: arrFrom(m.resistances ?? m.damage_resistances),
     immunities: arrFrom(m.immunities ?? m.damage_immunities),
     conditionImmunities: arrFrom(m.conditionImmunities ?? m.condition_immunities),
-    senses: String(m.senses || "").trim(),
-    languages: String(m.languages || "").trim(),
+    senses: arrFrom(m.senses),
+    languages: arrFrom(m.languages),
+    habitats: arrFrom(m.habitats ?? m.habitat ?? m.environments ?? m.environment),
     traits, actions, bonusActions, reactions, legendaryActions,
     sourceType: "custom",
   };
@@ -754,8 +803,8 @@ function loadDrafts() {
 
   function splitPreIntoCoreMetaTraits(pre) {
     // Keep first two lines for name/subtitle externally
-    const coreLabels = /^(Armor Class|Hit Points|Speed|STR|DEX|CON|INT|WIS|CHA|Challenge|Proficiency Bonus)\b/i;
-    const metaLabels = /^(Saving Throws|Skills|Damage Vulnerabilities|Damage Resistances|Damage Immunities|Condition Immunities|Senses|Languages|Habitat|Environment)\b/i;
+    const coreLabels = /^(Armor Class|Hit Points|Speed|Initiative|STR|DEX|CON|INT|WIS|CHA|Challenge|Proficiency Bonus|PB)\b/i;
+    const metaLabels = /^(Saving Throws|Skills|Damage Vulnerabilities|Damage Resistances|Damage Immunities|Condition Immunities|Immunities|Senses|Languages|Habitat|Environment)\b/i;
 
     const core = [];
     const meta = [];
@@ -873,6 +922,30 @@ function loadDrafts() {
     }
 
     return { value: value || "30 ft.", confidence: value ? "high" : "low" };
+  }  function parseInitiative(coreLines, allText) {
+    const coreJoin = repairNumericOCR((coreLines || []).join(" "));
+    const full = repairNumericOCR(String(allText || ""));
+    const text = `${coreJoin} ${full}`.replace(/\s+/g, " ").trim();
+
+    const m = /\bInitiative\b\s*[:\-]?\s*/i.exec(text);
+    if (!m) return { value: "", confidence: "low" };
+
+    let tail = text.slice((m.index || 0) + m[0].length).trim();
+
+    const boundaryRe = /\b(?:Armor\s*Class|AC|Hit\s*Points?|HP|Speed|STR|DEX|CON|INT|WIS|CHA|Challenge|CR|Proficiency\s*Bonus|PB|Saving\s*Throws?|Skills?|Senses?|Languages?)\b/i;
+    const b = tail.search(boundaryRe);
+    if (b >= 0) tail = tail.slice(0, b);
+
+    tail = tail.replace(/[.;]+$/g, "").trim();
+
+    const mm = tail.match(/([+\-]\s*\d+)(\s*\(\s*\d+\s*\))?/);
+    if (mm) {
+      const val = (mm[1] + (mm[2] || "")).replace(/\s+/g, " ").trim();
+      return { value: val, confidence: "high" };
+    }
+
+    const val = tail.split(/\s+/).slice(0, 6).join(" ").trim();
+    return { value: val, confidence: val ? "medium" : "low" };
   }
 
   function parseCRPB(coreLines, allText) {
@@ -905,6 +978,16 @@ function loadDrafts() {
     if (p) {
       pb = clamp(toInt(p[1], 2), -5, 20);
       pbConf = "high";
+    }
+
+
+    // Some stat blocks include PB inside the Challenge parentheses, e.g. "Challenge 13 (XP 10,000; PB +5)"
+    if (pbConf === "low" && m) {
+      const pbIn = String(m[0] || "").match(/\bPB\s*([+\-]?\d{1,2})\b/i);
+      if (pbIn) {
+        pb = clamp(toInt(pbIn[1], 2), -5, 20);
+        pbConf = "medium";
+      }
     }
 
     return { cr, xp, pb, crConf, pbConf };
@@ -982,7 +1065,18 @@ function loadDrafts() {
     const cleaned = (Array.isArray(labeled) ? labeled : [])
       .map(s => String(s || "").trim())
       .filter(Boolean)
-      .map(s => s.replace(/\b(STR|DEX|CON|INT|WIS|CHA)\.?\s*/i, (m) => m.toUpperCase().replace(".", "") + " "))
+      .map(s => {
+        let x = String(s || "").trim();
+        x = x
+          .replace(/\b(Strength|Str)\b\.?/i, "STR")
+          .replace(/\b(Dexterity|Dex)\b\.?/i, "DEX")
+          .replace(/\b(Constitution|Con)\b\.?/i, "CON")
+          .replace(/\b(Intelligence|Int)\b\.?/i, "INT")
+          .replace(/\b(Wisdom|Wis)\b\.?/i, "WIS")
+          .replace(/\b(Charisma|Cha)\b\.?/i, "CHA");
+        x = x.replace(/^(STR|DEX|CON|INT|WIS|CHA)\b\s*/i, (m) => m.toUpperCase().replace(".", "") + " ");
+        return x;
+      })
       .map(s => s.replace(/\s+/g, " "));
     if (cleaned.length) return cleaned;
 
@@ -1016,7 +1110,7 @@ function loadDrafts() {
     const rawLeftovers = [];
 
     let current = null;
-    const titleRe = /^([A-Z][A-Za-z0-9'’\-\s]{2,100})\.\s+(.+)$/;
+    const titleRe = /^(?:\d+\s*:\s*)?([A-Z][A-Za-z0-9'’\-\s(),\/]{1,120})\.\s+(.+)$/;
 
     for (const raw of lines) {
       const line = raw.trim();
@@ -1068,6 +1162,7 @@ function loadDrafts() {
     const acP = parseAC(preSplit.core, allText);
     const hpP = parseHP(preSplit.core, allText);
     const spP = parseSpeed(preSplit.core, allText);
+    const initP = parseInitiative(preSplit.core, allText);
     const crpb = parseCRPB(preSplit.core, allText);
     const abil = parseAbilities(preSplit.core, allText);
 
@@ -1076,7 +1171,20 @@ function loadDrafts() {
     const vulnerabilities = parseMetaList(preSplit.meta, "Damage Vulnerabilities");
     const resistances = parseMetaList(preSplit.meta, "Damage Resistances");
     const immunities = parseMetaList(preSplit.meta, "Damage Immunities");
-    const conditionImmunities = parseMetaList(preSplit.meta, "Condition Immunities");
+    let conditionImmunities = parseMetaList(preSplit.meta, "Condition Immunities");
+
+    // Some sources (and many markdown stat blocks) use a generic "Immunities" label.
+    // Heuristic: if it looks like damage types, treat as damage immunities; otherwise condition immunities.
+    const genericImmunities = parseMetaList(preSplit.meta, "Immunities");
+    if (genericImmunities.length) {
+      const dmgTypes = ["acid","bludgeoning","cold","fire","force","lightning","necrotic","piercing","poison","psychic","radiant","slashing","thunder"];
+      const hasDamageType = genericImmunities.some((s) => dmgTypes.some((dt) => String(s || "").toLowerCase().includes(dt)));
+      if (hasDamageType) {
+        if (!immunities.length) immunities.push(...genericImmunities);
+      } else {
+        if (!conditionImmunities.length) conditionImmunities = genericImmunities;
+      }
+    }
     const senses = parseMetaList(preSplit.meta, "Senses");
     const languages = parseMetaList(preSplit.meta, "Languages");
     const habitats = parseMetaList(preSplit.meta, "Habitat|Environment");
@@ -1113,6 +1221,7 @@ function loadDrafts() {
       hp: hpP.value,
       hpFormula: hpP.formula,
       speed: spP.value,
+      initiative: initP.value,
 
       cr: crpb.cr,
       xp: crpb.xp,
@@ -1157,6 +1266,7 @@ function loadDrafts() {
         ac: acP.confidence,
         hp: hpP.confidence,
         speed: spP.confidence,
+        initiative: initP.confidence,
         cr: crpb.crConf,
         pb: crpb.pbConf,
         abilities: abil.confidence,
@@ -1196,6 +1306,7 @@ function loadDrafts() {
       hp: clamp(toInt(q("sbi-hp")?.value, 1), 1, 9999),
       hpFormula: (q("sbi-hpFormula")?.value || "").trim(),
       speed: (q("sbi-speed")?.value || "").trim() || "30 ft.",
+      initiative: (q("sbi-initiative")?.value || "").trim(),
 
       cr: (q("sbi-cr")?.value || "").trim() || "1/8",
       xp: Math.max(0, toInt(q("sbi-xp")?.value, 0)),
@@ -1450,13 +1561,15 @@ function renderMvFeatureList(label, list) {
         </div>
 
         <div style="padding:12px;">
-          <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;">
-            ${abilities.map(a=>`<div style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:6px;text-align:center;">
-              <div class="muted" style="font-size:10px;">${a.abbr}</div>
-              <div style="font-weight:800;">${a.score} (${a.mod})</div>
-              <div class="muted" style="font-size:10px;">Save ${esc(String(a.save))}</div>
-            </div>`).join("")}
-          </div>
+          <table style="width:100%;table-layout:fixed;border-collapse:separate;border-spacing:6px 6px;">
+            <tr>
+              ${abilities.map(a=>`<td style="border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px;text-align:center;vertical-align:top;">
+                <div class="muted" style="font-size:10px;letter-spacing:.06em;">${a.abbr}</div>
+                <div style="font-weight:900;margin-top:1px;">${a.score} (${a.mod})</div>
+                <div class="muted" style="font-size:10px;margin-top:2px;">Save ${esc(String(a.save))}</div>
+              </td>`).join("")}
+            </tr>
+          </table>
 
           ${detailRows.length ? `<div style="margin-top:10px;display:grid;gap:4px;">${detailRows.map(([k,v])=>`<div><span class="muted">${esc(k)}:</span> ${esc(v)}</div>`).join("")}</div>` : ""}
 
@@ -1468,6 +1581,11 @@ function renderMvFeatureList(label, list) {
         </div>
       </div>`;
   }
+
+  function statBlockPreview(m) {
+    return statBlockPreview2024(m);
+  }
+
 
 
   
@@ -1647,7 +1765,7 @@ function template() {
       <div style="margin-top:10px;">
         <div class="sbi-muted" style="margin-bottom:8px;">Preview uses a compact layout, re-skinned to your theme colors.</div>
         <div style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;background:rgba(0,0,0,.18);">
-          ${statBlockPreviewCompact(toCanonicalMonster(state.importer.items[state.importer.selected]))}
+          ${statBlockPreview(toCanonicalMonster(state.importer.items[state.importer.selected]))}
         </div>
       </div>
     ` : `<div class="sbi-muted" style="margin-top:10px;">Select an imported monster to preview it.</div>`}
@@ -1706,6 +1824,7 @@ function template() {
                     <label>HP ${confBadge(p.confidence?.hp)}<input id="sbi-hp" type="number" value="${esc(p.hp)}"></label>
                     <label>HP Formula<input id="sbi-hpFormula" value="${esc(p.hpFormula || "")}"></label>
                     <label>Speed ${confBadge(p.confidence?.speed)}<input id="sbi-speed" value="${esc(p.speed || "")}"></label>
+                    <label>Initiative ${confBadge(p.confidence?.initiative)}<input id="sbi-initiative" value="${esc(p.initiative || "")}" placeholder="+0"></label>
 
                     <label>CR ${confBadge(p.confidence?.cr)}<input id="sbi-cr" value="${esc(p.cr)}"></label>
                     <label>XP<input id="sbi-xp" type="number" value="${esc(p.xp ?? 0)}"></label>
